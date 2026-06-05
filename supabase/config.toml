@@ -1,0 +1,11 @@
+[functions.analyze-month]
+# На старте отключаем проверку JWT, чтобы фронт мог вызывать Edge Functions без авторизации.
+# Для продакшена включите verify_jwt и добавьте проверку пользователя/сессии в коде функций.
+verify_jwt = false
+
+[functions.voice-to-expense]
+verify_jwt = false
+
+[functions.receipt-ocr]
+verify_jwt = false
+

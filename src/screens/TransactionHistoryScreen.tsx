@@ -1,0 +1,281 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
+import { DateCarouselPicker } from '../components/DateCarouselPicker';
+import { MonthSwitcher } from '../components/MonthSwitcher';
+import { TransactionList } from '../components/TransactionList';
+import { deleteTransaction, fetchTransactionsForMonth } from '../lib/transactions';
+import {
+  monthCacheKey,
+  readDashboardCache,
+  removeTransactionFromDashboardCache,
+} from '../lib/dashboardCache';
+import { formatTransactionSaveError } from '../lib/apiErrors';
+import {
+  filterTransactionsByDate,
+  formatHistoryDayLabel,
+  getUniqueDatesDescending,
+  sumTransactions,
+} from '../lib/transactionGrouping';
+import { formatMonthLabel } from '../lib/month';
+import type { HomeStackParamList } from '../navigation/types';
+import { hasSupabase } from '../lib/supabase';
+import type { Transaction } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useAppTheme } from '../contexts/ThemeContext';
+import { useThemedStyles } from '../theme/useThemedStyles';
+
+type Props = NativeStackScreenProps<HomeStackParamList, 'TransactionHistory'>;
+
+const TITLES = {
+  income: 'История доходов',
+  expense: 'История расходов',
+} as const;
+
+export function TransactionHistoryScreen({ navigation, route }: Props) {
+  const { user } = useAuth();
+  const { kind, month: initialMonth, initialTransactions } = route.params;
+  const { colors } = useAppTheme();
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth);
+  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions ?? []);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [isUserRefreshing, setIsUserRefreshing] = useState(false);
+  const lastFetchAtRef = useRef(initialTransactions?.length ? Date.now() : 0);
+  const deleteInFlightRef = useRef<string | null>(null);
+  const monthKeyRef = useRef(monthCacheKey(initialMonth));
+
+  const styles = useThemedStyles(({ colors: c, radii }) =>
+    StyleSheet.create({
+      safeArea: { flex: 1, backgroundColor: c.background },
+      scroll: { flex: 1 },
+      content: { paddingHorizontal: 20, paddingBottom: 40 },
+      backButton: { marginBottom: 8 },
+      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
+      title: { fontSize: 26, fontWeight: '800', color: c.text, marginBottom: 4 },
+      subtitle: { fontSize: 14, color: c.textMuted, marginBottom: 16 },
+      totalCard: {
+        backgroundColor: c.surface,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: c.borderLight,
+        padding: 16,
+        marginBottom: 16,
+      },
+      totalLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: c.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+      },
+      totalValue: { fontSize: 28, fontWeight: '800', color: c.text },
+      dayCard: {
+        backgroundColor: c.navy,
+        borderRadius: radii.lg,
+        padding: 16,
+        marginBottom: 14,
+      },
+      dayLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: c.textOnDarkMuted,
+        marginBottom: 4,
+        textTransform: 'capitalize',
+      },
+      dayTotal: {
+        fontSize: 26,
+        fontWeight: '800',
+        color: c.accent,
+      },
+      emptyDay: {
+        backgroundColor: c.surface,
+        borderRadius: radii.lg,
+        padding: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: c.border,
+        borderStyle: 'dashed',
+      },
+      emptyDayText: { fontSize: 15, color: c.textMuted, textAlign: 'center' },
+    })
+  );
+
+  const datesWithOps = useMemo(() => getUniqueDatesDescending(transactions), [transactions]);
+
+  const dayTransactions = useMemo(() => {
+    if (!selectedDate) return [];
+    return filterTransactionsByDate(transactions, selectedDate);
+  }, [transactions, selectedDate]);
+
+  const monthTotal = useMemo(() => sumTransactions(transactions), [transactions]);
+  const dayTotal = useMemo(() => sumTransactions(dayTransactions), [dayTransactions]);
+
+  useEffect(() => {
+    if (datesWithOps.length === 0) {
+      setSelectedDate(null);
+      return;
+    }
+    if (!selectedDate || !datesWithOps.includes(selectedDate)) {
+      setSelectedDate(datesWithOps[0]);
+    }
+  }, [datesWithOps, selectedDate]);
+
+  const load = useCallback(
+    async (options?: { background?: boolean }) => {
+      if (!hasSupabase) return;
+
+      const monthKey = monthCacheKey(selectedMonth);
+
+      if (user?.id && !options?.background) {
+        const cached = await readDashboardCache(user.id, selectedMonth);
+        if (cached && monthCacheKey(selectedMonth) === monthKey) {
+          const filtered = cached.transactions.filter((item) => item.kind === kind);
+          setTransactions(filtered);
+        }
+      }
+
+      try {
+        const rows = await fetchTransactionsForMonth(selectedMonth, kind);
+        setTransactions(rows);
+        lastFetchAtRef.current = Date.now();
+      } catch (error) {
+        console.warn('TransactionHistory load failed', error);
+      }
+    },
+    [kind, selectedMonth, user?.id]
+  );
+
+  const handlePullRefresh = useCallback(async () => {
+    setIsUserRefreshing(true);
+    try {
+      await load({ background: true });
+    } finally {
+      setIsUserRefreshing(false);
+    }
+  }, [load]);
+
+  useEffect(() => {
+    const monthKey = monthCacheKey(selectedMonth);
+    const monthChanged = monthKeyRef.current !== monthKey;
+    monthKeyRef.current = monthKey;
+
+    if (monthChanged) {
+      setSelectedDate(null);
+    }
+
+    void load({ background: !monthChanged });
+  }, [selectedMonth, kind, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const staleMs = 45_000;
+      if (Date.now() - lastFetchAtRef.current < staleMs) return;
+      void load({ background: true });
+    }, [load])
+  );
+
+  const editTransaction = (transaction: Transaction) => {
+    navigation.navigate('EditTransaction', { transaction });
+  };
+
+  const removeTransaction = (id: string) => {
+    if (deleteInFlightRef.current === id) return;
+
+    const snapshot = transactions;
+    setTransactions((prev) => prev.filter((item) => item.id !== id));
+    deleteInFlightRef.current = id;
+
+    void (async () => {
+      try {
+        await deleteTransaction(id);
+        if (user?.id) {
+          await removeTransactionFromDashboardCache(user.id, id, selectedMonth);
+        }
+      } catch (error) {
+        setTransactions(snapshot);
+        Alert.alert(
+          'Не удалось удалить',
+          formatTransactionSaveError(error, 'Проверьте интернет и попробуйте ещё раз.')
+        );
+      } finally {
+        deleteInFlightRef.current = null;
+      }
+    })();
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isUserRefreshing}
+            onRefresh={() => void handlePullRefresh()}
+            tintColor={colors.accent}
+          />
+        }
+      >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>← Назад</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>{TITLES[kind]}</Text>
+        <Text style={styles.subtitle}>{formatMonthLabel(selectedMonth)}</Text>
+
+        <MonthSwitcher value={selectedMonth} onChange={setSelectedMonth} />
+
+        {datesWithOps.length > 0 && selectedDate ? (
+          <DateCarouselPicker
+            dates={datesWithOps}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
+        ) : null}
+
+        <View style={styles.totalCard}>
+          <Text style={styles.totalLabel}>
+            {kind === 'income' ? 'Всего доходов за месяц' : 'Всего расходов за месяц'}
+          </Text>
+          <Text style={styles.totalValue}>₽{monthTotal.toLocaleString('ru-RU')}</Text>
+        </View>
+
+        {datesWithOps.length > 0 && selectedDate ? (
+          <View style={styles.dayCard}>
+            <Text style={styles.dayLabel}>{formatHistoryDayLabel(selectedDate)}</Text>
+            <Text style={styles.dayTotal}>₽{dayTotal.toLocaleString('ru-RU')}</Text>
+          </View>
+        ) : null}
+
+        {datesWithOps.length === 0 ? (
+          <View style={styles.emptyDay}>
+            <Text style={styles.emptyDayText}>
+              {kind === 'income'
+                ? 'В этом месяце пока нет доходов'
+                : 'В этом месяце пока нет расходов'}
+            </Text>
+          </View>
+        ) : (
+          <TransactionList
+            transactions={dayTransactions}
+            kind={kind}
+            showHeading={false}
+            onEdit={editTransaction}
+            onRemove={removeTransaction}
+          />
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
