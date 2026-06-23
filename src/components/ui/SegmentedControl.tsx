@@ -15,7 +15,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, s
     StyleSheet.create({
       track: {
         flexDirection: 'row',
-        backgroundColor: colors.primarySoft,
+        backgroundColor: colors.backgroundDeep,
         borderRadius: radii.md,
         padding: 4,
         marginBottom: 16,

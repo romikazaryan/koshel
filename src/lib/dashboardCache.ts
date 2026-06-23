@@ -101,6 +101,15 @@ export async function appendTransactionToDashboardCache(
   });
 }
 
+export async function appendTransactionsToDashboardCache(
+  userId: string,
+  newTransactions: Transaction[]
+): Promise<void> {
+  for (const transaction of newTransactions) {
+    await appendTransactionToDashboardCache(userId, transaction);
+  }
+}
+
 /** Убираем транзакцию из кэша главной сразу после удаления. */
 export async function removeTransactionFromDashboardCache(
   userId: string,
@@ -118,4 +127,14 @@ export async function removeTransactionFromDashboardCache(
     transactions,
     fetchedAt: Date.now(),
   });
+}
+
+/** Сброс кэша главной после массового удаления операций. */
+export async function invalidateDashboardCache(): Promise<void> {
+  memoryCache = null;
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.warn('dashboard cache invalidate failed', e);
+  }
 }

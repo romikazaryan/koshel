@@ -199,7 +199,12 @@ export function AuthScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+      >
         <FadeSlideIn delay={0} duration={520}>
           <KoshelLogo size={LOGO_SIZE.auth} style={styles.logo} />
         </FadeSlideIn>

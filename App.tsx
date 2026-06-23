@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import { ShareIntentProvider } from 'expo-share-intent';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { ThemeProvider, useAppTheme } from './src/contexts/ThemeContext';
+import { PendingQuickCaptureProvider } from './src/contexts/PendingQuickCaptureContext';
+import { SharedStatementProvider } from './src/contexts/SharedStatementContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { MainTabs } from './src/navigation/MainTabs';
 import { hasSupabase } from './src/lib/supabase';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { MIN_SPLASH_MS, SplashLoader } from './src/components/animations/SplashLoader';
+import { ShareIntentHandler } from './src/components/ShareIntentHandler';
 
 function AppNavigator() {
   useAuthDeepLink();
@@ -24,11 +28,11 @@ function AppNavigator() {
     return <SplashLoader />;
   }
 
-  if (hasSupabase && !session) {
-    return <AuthScreen />;
-  }
-
-  return <MainTabs />;
+  return (
+    <>
+      {hasSupabase && !session ? <AuthScreen /> : <MainTabs />}
+    </>
+  );
 }
 
 function ThemedApp() {
@@ -63,7 +67,12 @@ function ThemedApp() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <NavigationContainer theme={navTheme}>
         <AuthProvider>
-          <AppNavigator />
+          <PendingQuickCaptureProvider>
+            <SharedStatementProvider>
+              <ShareIntentHandler />
+              <AppNavigator />
+            </SharedStatementProvider>
+          </PendingQuickCaptureProvider>
         </AuthProvider>
       </NavigationContainer>
     </>
@@ -73,9 +82,11 @@ function ThemedApp() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedApp />
-      </ThemeProvider>
+      <ShareIntentProvider options={{ resetOnBackground: false }}>
+        <ThemeProvider>
+          <ThemedApp />
+        </ThemeProvider>
+      </ShareIntentProvider>
     </SafeAreaProvider>
   );
 }

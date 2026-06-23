@@ -1,14 +1,5 @@
 import type { Category } from '../types';
-
-const CATEGORY_KEYWORDS: Array<{ pattern: RegExp; category: Category }> = [
-  { pattern: /продукт|пятёроч|пятероч|магнит|перекрёст|ашан|лента|супермаркет/i, category: 'Продукты' },
-  { pattern: /метро|такси|яндекс\s*го|бензин|азс|транспорт|автобус/i, category: 'Транспорт' },
-  { pattern: /кофе|кафе|ресторан|обед|ужин|завтрак|бургер|пицц|starbucks|старбакс/i, category: 'Кафе' },
-  { pattern: /кино|театр|игр|подписк|netflix|нетфликс|развлеч/i, category: 'Развлечения' },
-  { pattern: /жкх|квартплат|электри|интернет|связь|мтс|билайн|теле2|коммунал/i, category: 'ЖКХ' },
-  { pattern: /одежд|обув|zara|hm|лэтуаль|рив гош/i, category: 'Одежда' },
-  { pattern: /аптек|лекарств|клиник|врач|здоров/i, category: 'Здоровье' },
-];
+import { inferCategoryFromText } from './transactionCategory';
 
 /** Простой разбор суммы из русской речи (запасной вариант без GPT). */
 export function extractAmountFromSpeech(text: string): number | null {
@@ -39,10 +30,8 @@ export function extractAmountFromSpeech(text: string): number | null {
 }
 
 export function inferCategoryFromSpeech(text: string): Category | null {
-  for (const { pattern, category } of CATEGORY_KEYWORDS) {
-    if (pattern.test(text)) return category;
-  }
-  return null;
+  const category = inferCategoryFromText(text, 'expense');
+  return category === 'Другое' ? null : (category as Category);
 }
 
 export function parseVoiceLocally(text: string): { sum: number; category: Category; note: string } | null {

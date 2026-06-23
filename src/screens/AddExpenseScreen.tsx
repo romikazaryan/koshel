@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { Category, IncomeCategory, TransactionKind, TransactionSource } from '../types';
 import { hasSupabase, supabase } from '../lib/supabase';
@@ -24,6 +25,7 @@ import { prepareReceiptImageBase64 } from '../lib/receiptImage';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
+import { AutoDismissToast } from '../components/ui/AutoDismissToast';
 
 type AddExpenseScreenProps = {
   lockedKind?: TransactionKind;
@@ -84,7 +86,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       contentContainer: { padding: 20, paddingBottom: 40 },
       kindToggle: {
         flexDirection: 'row',
-        backgroundColor: c.primarySoft,
+        backgroundColor: c.backgroundDeep,
         borderRadius: radii.md,
         padding: 4,
         marginBottom: 18,
@@ -99,14 +101,27 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         backgroundColor: c.surface,
         ...shadows.soft,
       },
+      kindOptionActiveIncome: {
+        borderWidth: 1,
+        borderColor: c.incomeMuted,
+      },
+      kindOptionActiveExpense: {
+        borderWidth: 1,
+        borderColor: c.expenseMuted,
+      },
       kindOptionText: {
         fontSize: 15,
         fontWeight: '600',
         color: c.textMuted,
       },
       kindOptionTextActive: {
-        color: c.text,
         fontWeight: '800',
+      },
+      kindOptionTextActiveIncome: {
+        color: c.incomeDark,
+      },
+      kindOptionTextActiveExpense: {
+        color: c.expenseDark,
       },
       header: {
         fontSize: 26,
@@ -127,15 +142,15 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         marginBottom: 14,
       },
       voiceStatusCard: {
-        backgroundColor: c.accentSoft,
+        backgroundColor: c.surfaceMuted,
         borderRadius: radii.md,
         padding: 14,
         marginBottom: 16,
         borderWidth: 1,
-        borderColor: c.accentMuted,
+        borderColor: c.border,
       },
       voiceStatusTitle: {
-        color: c.accentDark,
+        color: c.text,
         fontWeight: '700',
         fontSize: 14,
         marginBottom: 6,
@@ -195,9 +210,13 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         marginBottom: 8,
         backgroundColor: c.surface,
       },
-      categoryPillActive: {
-        backgroundColor: c.accent,
-        borderColor: c.accent,
+      categoryPillActiveIncome: {
+        backgroundColor: c.income,
+        borderColor: c.income,
+      },
+      categoryPillActiveExpense: {
+        backgroundColor: c.expense,
+        borderColor: c.expense,
       },
       pillText: {
         color: c.textSecondary,
@@ -209,11 +228,11 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
       primaryButton: {
         flex: 1,
-        backgroundColor: c.accent,
+        backgroundColor: c.expense,
         borderRadius: radii.md,
         paddingVertical: 16,
         alignItems: 'center',
-        shadowColor: c.accent,
+        shadowColor: c.expense,
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 4,
@@ -228,17 +247,23 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         borderColor: c.border,
       },
       buttonText: { color: c.textOnAccent, fontWeight: '700' },
-      buttonTextSecondary: { color: c.accentDark, fontWeight: '700' },
+      buttonTextSecondary: { color: c.expenseDark, fontWeight: '700' },
       saveButton: {
-        backgroundColor: c.accent,
         borderRadius: radii.lg,
         paddingVertical: 16,
         alignItems: 'center',
         marginTop: 10,
-        shadowColor: c.accent,
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 4,
+      },
+      saveButtonIncome: {
+        backgroundColor: c.income,
+        shadowColor: c.income,
+      },
+      saveButtonExpense: {
+        backgroundColor: c.expense,
+        shadowColor: c.expense,
       },
       saveText: {
         color: c.textOnAccent,
@@ -266,7 +291,15 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
   const [category, setCategory] = useState<Category>('Продукты')
   const [incomeCategory, setIncomeCategory] = useState<IncomeCategory>('Зарплата')
   const [isSaving, setIsSaving] = useState(false)
+  const [saveToast, setSaveToast] = useState<string | null>(null)
   const saveInFlightRef = useRef(false)
+  const formScrollRef = useRef<ScrollView>(null)
+
+  const scrollFocusedFieldIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      formScrollRef.current?.scrollToEnd({ animated: true })
+    })
+  }, [])
 
   // Modes: form -> voice parse -> form, or form -> camera -> receipt review -> save.
   const [mode, setMode] = useState<'form' | 'camera' | 'receiptReview'>('form')
@@ -375,10 +408,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       setVoicePreview(null)
       setVoiceStatus('idle')
       setMode('form')
-      Alert.alert(
-        'Сохранено',
-        saveKind === 'income' ? 'Доход добавлен на главную.' : 'Расход добавлен на главную.'
-      )
+      setSaveToast(saveKind === 'income' ? 'Доход сохранён' : 'Расход сохранён')
     } catch (e) {
       const message = formatTransactionSaveError(
         e,
@@ -699,8 +729,11 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
 
   const showKindToggle = !lockedKind
   const showHeader = !embedded || lockedKind === 'income'
-  const Root = embedded ? View : SafeAreaView
-  const rootProps = embedded ? { style: { flex: 1 } } : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const }
+  const isNested = embedded || Boolean(lockedKind)
+  const Root = isNested ? View : SafeAreaView
+  const rootProps = isNested
+    ? { style: { flex: 1 } }
+    : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const }
 
   return (
     <Root {...rootProps}>
@@ -715,29 +748,50 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       </Modal>
 
       {mode === 'form' && (
-        <ScrollView
+        <KeyboardAwareScrollView
+          ref={formScrollRef}
           style={styles.scroll}
           contentContainerStyle={[
             styles.contentContainer,
             embedded && { paddingTop: 0 },
           ]}
-          keyboardShouldPersistTaps="handled"
+          keyboardBottomPadding={120}
         >
           {showKindToggle ? (
             <View style={styles.kindToggle}>
               <TouchableOpacity
-                style={[styles.kindOption, entryKind === 'expense' && styles.kindOptionActive]}
+                style={[
+                  styles.kindOption,
+                  entryKind === 'expense' && styles.kindOptionActive,
+                  entryKind === 'expense' && styles.kindOptionActiveExpense,
+                ]}
                 onPress={() => switchEntryKind('expense')}
               >
-                <Text style={[styles.kindOptionText, entryKind === 'expense' && styles.kindOptionTextActive]}>
+                <Text
+                  style={[
+                    styles.kindOptionText,
+                    entryKind === 'expense' && styles.kindOptionTextActive,
+                    entryKind === 'expense' && styles.kindOptionTextActiveExpense,
+                  ]}
+                >
                   Расход
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.kindOption, entryKind === 'income' && styles.kindOptionActive]}
+                style={[
+                  styles.kindOption,
+                  entryKind === 'income' && styles.kindOptionActive,
+                  entryKind === 'income' && styles.kindOptionActiveIncome,
+                ]}
                 onPress={() => switchEntryKind('income')}
               >
-                <Text style={[styles.kindOptionText, entryKind === 'income' && styles.kindOptionTextActive]}>
+                <Text
+                  style={[
+                    styles.kindOptionText,
+                    entryKind === 'income' && styles.kindOptionTextActive,
+                    entryKind === 'income' && styles.kindOptionTextActiveIncome,
+                  ]}
+                >
                   Доход
                 </Text>
               </TouchableOpacity>
@@ -746,7 +800,9 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
 
           {showHeader ? (
             <>
-              <Text style={styles.header}>{entryKind === 'income' ? 'Новый доход' : 'Новый расход'}</Text>
+              <Text style={styles.header}>
+                {entryKind === 'income' ? 'Новый доход' : 'Новый расход'}
+              </Text>
               <Text style={styles.headerHint}>
                 {entryKind === 'income'
                   ? 'Зарплата, подработка и другие поступления'
@@ -830,7 +886,13 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
                 return (
                   <TouchableOpacity
                     key={item}
-                    style={[styles.categoryPill, selected && styles.categoryPillActive]}
+                    style={[
+                      styles.categoryPill,
+                      selected &&
+                        (entryKind === 'income'
+                          ? styles.categoryPillActiveIncome
+                          : styles.categoryPillActiveExpense),
+                    ]}
                     onPress={() =>
                       entryKind === 'income'
                         ? setIncomeCategory(item as IncomeCategory)
@@ -854,15 +916,23 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
               value={note}
               onChangeText={setNote}
               multiline
+              onFocus={scrollFocusedFieldIntoView}
             />
           </View>
 
-          <TouchableOpacity style={styles.saveButton} onPress={() => void handleSave()} disabled={isSaving || isProcessingAi}>
+          <TouchableOpacity
+            style={[
+              styles.saveButton,
+              entryKind === 'income' ? styles.saveButtonIncome : styles.saveButtonExpense,
+            ]}
+            onPress={() => void handleSave()}
+            disabled={isSaving || isProcessingAi}
+          >
             <Text style={styles.saveText}>
               {isSaving ? 'Сохраняю...' : entryKind === 'income' ? 'Сохранить доход' : 'Сохранить расход'}
             </Text>
           </TouchableOpacity>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
 
       {mode === 'camera' && (
@@ -894,7 +964,12 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       )}
 
       {mode === 'receiptReview' && (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.contentContainer}>
+        <KeyboardAwareScrollView
+          ref={formScrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.contentContainer}
+          keyboardBottomPadding={120}
+        >
           <Text style={styles.header}>Подтверждение чека</Text>
 
           <View style={styles.field}>
@@ -907,6 +982,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
                     value={it.name}
                     onChangeText={(t) => handleReceiptItemChange(idx, { name: t })}
                     placeholder={`Позиция ${idx + 1}`}
+                    onFocus={scrollFocusedFieldIntoView}
                   />
                   <TextInput
                     style={[styles.input, styles.itemPrice]}
@@ -947,6 +1023,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
               value={receiptNote}
               onChangeText={setReceiptNote}
               multiline
+              onFocus={scrollFocusedFieldIntoView}
             />
           </View>
 
@@ -965,8 +1042,10 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
           >
             <Text style={styles.saveText}>{isSaving ? 'Сохраняю...' : 'Сохранить расход'}</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       )}
+
+      <AutoDismissToast message={saveToast} onHide={() => setSaveToast(null)} />
     </Root>
   )
 }

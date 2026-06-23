@@ -15,6 +15,7 @@ import { DateCarouselPicker } from '../components/DateCarouselPicker';
 import { MonthSwitcher } from '../components/MonthSwitcher';
 import { TransactionList } from '../components/TransactionList';
 import { deleteTransaction, fetchTransactionsForMonth } from '../lib/transactions';
+import { filterIncomeForDisplay } from '../lib/purchaseRefunds';
 import {
   monthCacheKey,
   readDashboardCache,
@@ -24,10 +25,9 @@ import { formatTransactionSaveError } from '../lib/apiErrors';
 import {
   filterTransactionsByDate,
   formatHistoryDayLabel,
-  getUniqueDatesDescending,
   sumTransactions,
 } from '../lib/transactionGrouping';
-import { formatMonthLabel } from '../lib/month';
+import { formatMonthLabel, getMonthDatesDescending } from '../lib/month';
 import type { HomeStackParamList } from '../navigation/types';
 import { hasSupabase } from '../lib/supabase';
 import type { Transaction } from '../types';
@@ -50,11 +50,10 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions ?? []);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isUserRefreshing, setIsUserRefreshing] = useState(false);
-  const lastFetchAtRef = useRef(initialTransactions?.length ? Date.now() : 0);
   const deleteInFlightRef = useRef<string | null>(null);
   const monthKeyRef = useRef(monthCacheKey(initialMonth));
 
-  const styles = useThemedStyles(({ colors: c, radii }) =>
+  const styles = useThemedStyles(({ colors: c, cardBase }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: c.background },
       scroll: { flex: 1 },
@@ -81,55 +80,61 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
       },
       totalValue: { fontSize: 28, fontWeight: '800', color: c.text },
       dayCard: {
-        backgroundColor: c.navy,
-        borderRadius: radii.lg,
+        ...cardBase,
         padding: 16,
         marginBottom: 14,
+        borderLeftWidth: 3,
+      },
+      dayCardIncome: {
+        borderLeftColor: c.income,
+      },
+      dayCardExpense: {
+        borderLeftColor: c.expense,
       },
       dayLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: c.textOnDarkMuted,
+        color: c.textMuted,
         marginBottom: 4,
         textTransform: 'capitalize',
       },
       dayTotal: {
         fontSize: 26,
         fontWeight: '800',
-        color: c.accent,
       },
-      emptyDay: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 24,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: c.border,
-        borderStyle: 'dashed',
+      dayTotalIncome: {
+        color: c.incomeDark,
       },
-      emptyDayText: { fontSize: 15, color: c.textMuted, textAlign: 'center' },
+      dayTotalExpense: {
+        color: c.expenseDark,
+      },
     })
   );
 
-  const datesWithOps = useMemo(() => getUniqueDatesDescending(transactions), [transactions]);
+  const monthDates = useMemo(() => getMonthDatesDescending(selectedMonth), [selectedMonth]);
+
+  const displayTransactions = useMemo(
+    () => (kind === 'income' ? filterIncomeForDisplay(transactions) : transactions),
+    [kind, transactions]
+  );
 
   const dayTransactions = useMemo(() => {
     if (!selectedDate) return [];
-    return filterTransactionsByDate(transactions, selectedDate);
-  }, [transactions, selectedDate]);
+    return filterTransactionsByDate(displayTransactions, selectedDate);
+  }, [displayTransactions, selectedDate]);
 
-  const monthTotal = useMemo(() => sumTransactions(transactions), [transactions]);
+  const monthTotal = useMemo(() => sumTransactions(displayTransactions), [displayTransactions]);
   const dayTotal = useMemo(() => sumTransactions(dayTransactions), [dayTransactions]);
 
   useEffect(() => {
-    if (datesWithOps.length === 0) {
+    if (monthDates.length === 0) {
       setSelectedDate(null);
       return;
     }
-    if (!selectedDate || !datesWithOps.includes(selectedDate)) {
-      setSelectedDate(datesWithOps[0]);
+    if (!selectedDate || !monthDates.includes(selectedDate)) {
+      setSelectedDate(monthDates[0]);
     }
-  }, [datesWithOps, selectedDate]);
+  }, [monthDates, selectedDate]);
 
   const load = useCallback(
     async (options?: { background?: boolean }) => {
@@ -141,14 +146,13 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
         const cached = await readDashboardCache(user.id, selectedMonth);
         if (cached && monthCacheKey(selectedMonth) === monthKey) {
           const filtered = cached.transactions.filter((item) => item.kind === kind);
-          setTransactions(filtered);
+          setTransactions(kind === 'income' ? filterIncomeForDisplay(filtered) : filtered);
         }
       }
 
       try {
         const rows = await fetchTransactionsForMonth(selectedMonth, kind);
-        setTransactions(rows);
-        lastFetchAtRef.current = Date.now();
+        setTransactions(kind === 'income' ? filterIncomeForDisplay(rows) : rows);
       } catch (error) {
         console.warn('TransactionHistory load failed', error);
       }
@@ -179,8 +183,6 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      const staleMs = 45_000;
-      if (Date.now() - lastFetchAtRef.current < staleMs) return;
       void load({ background: true });
     }, [load])
   );
@@ -236,9 +238,9 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
 
         <MonthSwitcher value={selectedMonth} onChange={setSelectedMonth} />
 
-        {datesWithOps.length > 0 && selectedDate ? (
+        {monthDates.length > 0 && selectedDate ? (
           <DateCarouselPicker
-            dates={datesWithOps}
+            dates={monthDates}
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
           />
@@ -251,30 +253,38 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
           <Text style={styles.totalValue}>₽{monthTotal.toLocaleString('ru-RU')}</Text>
         </View>
 
-        {datesWithOps.length > 0 && selectedDate ? (
-          <View style={styles.dayCard}>
+        {monthDates.length > 0 && selectedDate ? (
+          <View
+            style={[
+              styles.dayCard,
+              kind === 'income' ? styles.dayCardIncome : styles.dayCardExpense,
+            ]}
+          >
             <Text style={styles.dayLabel}>{formatHistoryDayLabel(selectedDate)}</Text>
-            <Text style={styles.dayTotal}>₽{dayTotal.toLocaleString('ru-RU')}</Text>
+            <Text
+              style={[
+                styles.dayTotal,
+                kind === 'income' ? styles.dayTotalIncome : styles.dayTotalExpense,
+              ]}
+            >
+              ₽{dayTotal.toLocaleString('ru-RU')}
+            </Text>
           </View>
         ) : null}
 
-        {datesWithOps.length === 0 ? (
-          <View style={styles.emptyDay}>
-            <Text style={styles.emptyDayText}>
-              {kind === 'income'
-                ? 'В этом месяце пока нет доходов'
-                : 'В этом месяце пока нет расходов'}
-            </Text>
-          </View>
-        ) : (
+        {monthDates.length > 0 && selectedDate ? (
           <TransactionList
             transactions={dayTransactions}
             kind={kind}
             showHeading={false}
+            emptyTitle={
+              kind === 'income' ? 'В этот день доходов не было' : 'В этот день расходов не было'
+            }
+            emptyHint=""
             onEdit={editTransaction}
             onRemove={removeTransaction}
           />
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

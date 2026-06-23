@@ -5,7 +5,7 @@ import { useThemedStyles } from '../../theme/useThemedStyles';
 type Props = {
   children: ReactNode;
   style?: ViewStyle;
-  variant?: 'default' | 'flat' | 'accent';
+  variant?: 'default' | 'flat' | 'accent' | 'income' | 'expense';
 };
 
 export function Card({ children, style, variant = 'default' }: Props) {
@@ -23,7 +23,17 @@ export function Card({ children, style, variant = 'default' }: Props) {
       },
       accent: {
         borderColor: colors.accentMuted,
-        backgroundColor: colors.accentSoft,
+        backgroundColor: colors.surface,
+      },
+      income: {
+        borderLeftWidth: 3,
+        borderLeftColor: colors.income,
+        backgroundColor: colors.surface,
+      },
+      expense: {
+        borderLeftWidth: 3,
+        borderLeftColor: colors.expense,
+        backgroundColor: colors.surface,
       },
     })
   );
@@ -34,6 +44,8 @@ export function Card({ children, style, variant = 'default' }: Props) {
         styles.base,
         variant === 'flat' && styles.flat,
         variant === 'accent' && styles.accent,
+        variant === 'income' && styles.income,
+        variant === 'expense' && styles.expense,
         style,
       ]}
     >

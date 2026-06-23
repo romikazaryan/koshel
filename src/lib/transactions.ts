@@ -16,6 +16,12 @@ export type InsertTransactionInput = {
   date: string;
   source: TransactionSource;
   kind: TransactionKind;
+  externalId?: string;
+};
+
+export type InsertTransactionsBatchResult = {
+  inserted: Transaction[];
+  duplicates: number;
 };
 
 function mapTransactionRow(item: Record<string, unknown>): Transaction {
@@ -43,6 +49,7 @@ export async function insertTransaction(input: InsertTransactionInput): Promise<
     date: input.date,
     source: input.source,
     kind: input.kind,
+    external_id: input.externalId ?? null,
   };
 
   const data = await withNetworkRetries(
@@ -68,6 +75,63 @@ export async function insertTransaction(input: InsertTransactionInput): Promise<
   );
 
   return mapTransactionRow(data as Record<string, unknown>);
+}
+
+export async function insertTransactionsBatch(
+  inputs: InsertTransactionInput[]
+): Promise<InsertTransactionsBatchResult> {
+  const client = supabase;
+  if (!client) throw new Error('Supabase не настроен.');
+  if (inputs.length === 0) return { inserted: [], duplicates: 0 };
+
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error('Нужна авторизация.');
+
+  const BATCH_SIZE = 40;
+  const inserted: Transaction[] = [];
+  let duplicates = 0;
+
+  for (let offset = 0; offset < inputs.length; offset += BATCH_SIZE) {
+    const chunk = inputs.slice(offset, offset + BATCH_SIZE).map((input) => ({
+      user_id: user.id,
+      title: input.title,
+      amount: input.amount,
+      category: input.category,
+      note: input.note?.trim() || null,
+      date: input.date,
+      source: input.source,
+      kind: input.kind,
+      external_id: input.externalId ?? null,
+    }));
+
+    const result = await withNetworkRetries(
+      async () => {
+        const response = await withTimeout(
+          client
+            .from('transactions')
+            .upsert(chunk, { onConflict: 'user_id,external_id', ignoreDuplicates: true })
+            .select('id,title,amount,category,date,source,kind,note'),
+          MUTATION_TIMEOUT_MS * 2,
+          'Сервер не ответил вовремя'
+        );
+        if (response.error) throw response.error;
+        return response.data ?? [];
+      },
+      {
+        attempts: 3,
+        baseDelayMs: 300,
+        onAuthRetry: refreshSessionOnce,
+      }
+    );
+
+    const mapped = result.map((row) => mapTransactionRow(row as Record<string, unknown>));
+    inserted.push(...mapped);
+    duplicates += chunk.length - mapped.length;
+  }
+
+  return { inserted, duplicates };
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
@@ -101,6 +165,7 @@ export async function fetchTransactionsForMonth(
   let query = supabase
     .from('transactions')
     .select('id,title,amount,category,date,source,kind,note')
+    .is('reconciled_with_id', null)
     .gte('date', range.start)
     .lte('date', range.end)
     .order('date', { ascending: false })
@@ -133,7 +198,8 @@ export type UpdateTransactionInput = {
   kind: TransactionKind;
   amount: number;
   category: string;
-  note: string;
+  title: string;
+  note?: string | null;
   date: string;
 };
 
@@ -141,7 +207,7 @@ export async function updateTransaction(input: UpdateTransactionInput): Promise<
   if (!supabase) throw new Error('Supabase не настроен.');
 
   const title =
-    input.note.trim() ||
+    input.title.trim() ||
     (input.kind === 'income' ? input.category : `${input.category} расход`);
 
   const { error } = await supabase
@@ -150,7 +216,7 @@ export async function updateTransaction(input: UpdateTransactionInput): Promise<
       title,
       amount: input.amount,
       category: input.category,
-      note: input.note.trim() || null,
+      note: input.note?.trim() || null,
       date: input.date,
     })
     .eq('id', input.id);

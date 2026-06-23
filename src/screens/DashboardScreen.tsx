@@ -7,17 +7,16 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { CategoryChart } from '../components/CategoryChart';
-import { HealthScoreCard } from '../components/HealthScoreCard';
-import { MonthSwitcher } from '../components/MonthSwitcher';
-import { MonthlyBudgetCard } from '../components/MonthlyBudgetCard';
+import { DashboardAtmosphereHeader } from '../components/dashboard/DashboardAtmosphereHeader';
+import { DashboardOverviewHero } from '../components/dashboard/DashboardOverviewHero';
+import { DashboardLinksBar } from '../components/dashboard/DashboardLinksBar';
+import { DashboardInsightsSection } from '../components/dashboard/DashboardInsightsSection';
 import { useAuth } from '../contexts/AuthContext';
 import { hasSupabase, supabase } from '../lib/supabase';
 import { getEdgeFunctionErrorMessage } from '../lib/edgeFunctionErrors';
@@ -28,7 +27,14 @@ import {
   writeDashboardCache,
 } from '../lib/dashboardCache';
 import { fetchMonthlyBudget } from '../lib/userSettings';
-import { formatMonthLabel, getMonthRange, getTodayMonth, type MonthRef } from '../lib/month';
+import { formatMonthGenitive, formatMonthLabel, getMonthRange, getTodayMonth, type MonthRef } from '../lib/month';
+import {
+  buildMonthAnalysisPayload,
+  getAnalysisDateRange,
+  analysisPeriodHint,
+  parseMonthAnalysisResult,
+} from '../lib/monthAnalysisPayload';
+import type { AnalysisPeriodMonths } from '../types/monthAnalysis';
 import {
   getActiveSubscriptionsForMonth,
   getSubscriptionsTotalForMonth,
@@ -40,18 +46,19 @@ import {
   fetchDebts,
 } from '../lib/debts';
 import {
+  fetchCapitalAssets,
   fetchCapitalAssetsValued,
   getCapitalTotal,
-  getActiveCapitalAssets,
 } from '../lib/capital';
 import { formatRecurringExpenseHint } from '../lib/recurringExpenseHint';
+import { isEarnedIncome, sumPurchaseRefunds } from '../lib/purchaseRefunds';
 import { withTimeout } from '../lib/asyncUtils';
 import { Transaction, Category, type Subscription, type Debt, type CapitalAsset } from '../types';
 import type { HomeStackParamList, MainTabParamList } from '../navigation/types';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { FadeSlideIn } from '../components/animations/FadeSlideIn';
-import { KoshelLogo } from '../components/brand/KoshelLogo';
-import { LOGO_SIZE } from '../components/brand/koshelLogoStyles';
+import { useBankStatementImport } from '../contexts/BankStatementImportContext';
+import { PendingQuickCaptureHandler } from '../components/PendingQuickCaptureHandler';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
@@ -74,7 +81,8 @@ const calculateHealthScore = (transactions: Transaction[], income: number, balan
 export function DashboardScreen({ navigation }: Props) {
   const { user } = useAuth();
   const { colors } = useAppTheme();
-  const styles = useThemedStyles(({ colors: c, cardBase, radii }) =>
+  const { openManualImport, setOnImportedListener } = useBankStatementImport();
+  const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
       safeArea: {
         flex: 1,
@@ -85,140 +93,8 @@ export function DashboardScreen({ navigation }: Props) {
       },
       contentContainer: {
         paddingHorizontal: 20,
-        paddingTop: 0,
-        paddingBottom: 40,
-      },
-      hero: {
-        backgroundColor: c.navy,
-        marginHorizontal: -20,
-        marginBottom: 20,
-        paddingHorizontal: 24,
-        paddingTop: 8,
-        paddingBottom: 28,
-        borderBottomLeftRadius: radii.xl,
-        borderBottomRightRadius: radii.xl,
-      },
-      heroBrand: {
-        marginBottom: 4,
-      },
-      heroTagline: {
-        fontSize: 15,
-        color: c.textOnDarkMuted,
-        marginBottom: 6,
-      },
-      heroSub: {
-        fontSize: 14,
-        color: c.textOnDark,
-        opacity: 0.85,
-      },
-      summaryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 16,
-        gap: 12,
-      },
-      summaryCard: {
-        flex: 1,
-        ...cardBase,
-        padding: 18,
-        marginBottom: 0,
-      },
-      summaryCardAccent: {
-        backgroundColor: c.accentSoft,
-        borderColor: c.accent,
-      },
-      summaryLabel: {
-        color: c.textMuted,
-        fontSize: 12,
-        marginBottom: 8,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        fontWeight: '700',
-      },
-      summaryValue: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: c.text,
-      },
-      summaryHint: {
-        fontSize: 11,
-        color: c.textMuted,
-        marginTop: 6,
-        lineHeight: 14,
-      },
-      capitalCard: {
-        ...cardBase,
-        padding: 18,
-        marginBottom: 16,
-        backgroundColor: c.primarySoft,
-        borderColor: c.border,
-      },
-      capitalValue: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: c.accent,
-      },
-      budgetHintCard: {
-        backgroundColor: c.primarySoft,
-        borderRadius: radii.lg,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: c.border,
-      },
-      budgetHintText: {
-        fontSize: 14,
-        lineHeight: 20,
-        color: c.textSecondary,
-      },
-      card: {
-        ...cardBase,
-        padding: 18,
-        marginBottom: 16,
-      },
-      cardTitle: {
-        color: c.textMuted,
-        fontSize: 12,
-        marginBottom: 10,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
-        fontWeight: '700',
-      },
-      budget: {
-        fontSize: 38,
-        fontWeight: '900',
-        color: c.text,
-      },
-      cardSubtitle: {
-        marginTop: 10,
-        color: c.textMuted,
-        fontSize: 14,
-        lineHeight: 20,
-      },
-      analyzeButton: {
-        marginTop: 20,
-        backgroundColor: c.accent,
-        borderRadius: radii.lg,
-        paddingVertical: 18,
-        paddingHorizontal: 20,
-        shadowColor: c.accent,
-        shadowOpacity: 0.35,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 6,
-      },
-      analyzeButtonText: {
-        color: c.textOnAccent,
-        fontWeight: '800',
-        fontSize: 17,
-        marginBottom: 4,
-      },
-      analyzeButtonHint: {
-        color: 'rgba(255, 255, 255, 0.85)',
-        fontSize: 13,
-      },
-      analyzeButtonDisabled: {
-        opacity: 0.75,
+        paddingTop: 4,
+        paddingBottom: 32,
       },
       analyzeOverlay: {
         flex: 1,
@@ -252,6 +128,7 @@ export function DashboardScreen({ navigation }: Props) {
     })
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisPeriod, setAnalysisPeriod] = useState<AnalysisPeriodMonths>(6);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -268,7 +145,11 @@ export function DashboardScreen({ navigation }: Props) {
     [transactions]
   );
   const monthIncomes = useMemo(
-    () => transactions.filter((item) => item.kind === 'income'),
+    () => transactions.filter(isEarnedIncome),
+    [transactions]
+  );
+  const purchaseRefundTotal = useMemo(
+    () => sumPurchaseRefunds(transactions),
     [transactions]
   );
 
@@ -289,21 +170,13 @@ export function DashboardScreen({ navigation }: Props) {
     [debts, selectedMonth]
   );
   const capitalTotal = useMemo(() => getCapitalTotal(capitalAssets), [capitalAssets]);
-  const activeCapitalCount = useMemo(
-    () => getActiveCapitalAssets(capitalAssets).length,
-    [capitalAssets]
-  );
-  const hasLiveCapital = useMemo(
-    () => capitalAssets.some((item) => item.isActive && item.valuationMode === 'market'),
-    [capitalAssets]
-  );
   const recurringExpenseHint = useMemo(
     () => formatRecurringExpenseHint(subscriptionsTotal, debtsTotal),
     [subscriptionsTotal, debtsTotal]
   );
   const totalExpenses = useMemo(
-    () => transactionExpenses + subscriptionsTotal + debtsTotal,
-    [transactionExpenses, subscriptionsTotal, debtsTotal]
+    () => transactionExpenses - purchaseRefundTotal + subscriptionsTotal + debtsTotal,
+    [transactionExpenses, purchaseRefundTotal, subscriptionsTotal, debtsTotal]
   );
   const balance = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
 
@@ -394,6 +267,7 @@ export function DashboardScreen({ navigation }: Props) {
           supabase
             .from('transactions')
             .select('id,title,amount,category,date,source,kind,note')
+            .is('reconciled_with_id', null)
             .gte('date', range.start)
             .lte('date', range.end)
             .order('date', { ascending: false })
@@ -427,12 +301,21 @@ export function DashboardScreen({ navigation }: Props) {
           setDebts(rows);
         });
 
-        const capitalPromise = fetchCapitalAssetsValued().then(({ assets }) => {
-          nextCapital = assets;
-          setCapitalAssets(assets);
+        const capitalPromise = fetchCapitalAssets().then((rows) => {
+          nextCapital = rows;
+          setCapitalAssets(rows);
         });
 
         await Promise.all([txPromise, budgetPromise, subsPromise, debtsPromise, capitalPromise]);
+
+        // Живые котировки для суммы капитала — в фоне, не блокируем главную.
+        void fetchCapitalAssetsValued()
+          .then(({ assets }) => {
+            setCapitalAssets(assets);
+          })
+          .catch((error) => {
+            console.warn('Capital live refresh failed', error);
+          });
 
         await writeDashboardCache({
           userId,
@@ -527,12 +410,23 @@ export function DashboardScreen({ navigation }: Props) {
     return () => task.cancel();
   }, [selectedMonth]);
 
+  useEffect(() => {
+    setOnImportedListener(() => {
+      void loadDashboard({ force: true });
+    });
+    return () => setOnImportedListener(null);
+  }, [loadDashboard, setOnImportedListener]);
+
   const openHistory = (kind: 'income' | 'expense') => {
-    navigation.navigate('TransactionHistory', {
-      kind,
+    const params = {
       month: selectedMonth,
       initialTransactions: kind === 'income' ? monthIncomes : monthExpenses,
-    });
+    };
+    if (kind === 'expense') {
+      navigation.navigate('OperationsHub', params);
+      return;
+    }
+    navigation.navigate('IncomeMain', params);
   };
 
   const openCapital = () => {
@@ -555,24 +449,41 @@ export function DashboardScreen({ navigation }: Props) {
       return
     }
 
-    const total = totalExpenses
-    const expensesByCategory = categorySummary.map((c) => ({
-      category: c.category,
-      amount: c.amount,
-      percent: total > 0 ? Math.round((c.amount / total) * 100) : 0,
-    }))
-
     try {
       setIsAnalyzing(true);
+
+      const analysisRange = getAnalysisDateRange(selectedMonth, analysisPeriod);
+      const { data: historyRows, error: historyError } = await withTimeout(
+        supabase
+          .from('transactions')
+          .select('id,title,amount,category,date,source,kind,note')
+          .is('reconciled_with_id', null)
+          .gte('date', analysisRange.start)
+          .lte('date', analysisRange.end)
+          .order('date', { ascending: false })
+          .limit(5000),
+        20_000,
+        'Не удалось загрузить историю операций'
+      );
+
+      if (historyError) {
+        Alert.alert('Ошибка', historyError.message || 'Не удалось загрузить операции для анализа.')
+        return
+      }
+
+      const historyTransactions = mapTransactions(historyRows ?? []);
+      const analysisPayload = buildMonthAnalysisPayload({
+        transactions: historyTransactions,
+        subscriptions,
+        debts,
+        selectedMonth,
+        periodMonths: analysisPeriod,
+        monthlyBudget,
+        healthScore,
+      });
+
       const { data, error } = await supabase.functions.invoke('analyze-month', {
-        body: {
-          income: totalIncome,
-          totalExpenses: totalExpenses,
-          balance,
-          healthScore,
-          monthlyBudget,
-          expensesByCategory,
-        },
+        body: analysisPayload,
       })
 
       if (error) {
@@ -581,18 +492,29 @@ export function DashboardScreen({ navigation }: Props) {
         return
       }
 
-      const payload = data as { ok?: boolean; recommendations?: string; reason?: string } | null
-      const recommendations = payload?.recommendations
-      if (!recommendations?.trim()) {
+      const payload = data as {
+        ok?: boolean
+        analysis?: unknown
+        recommendations?: string
+        reason?: string
+      } | null
+
+      const analysis = parseMonthAnalysisResult(payload?.analysis)
+
+      if (!analysis && !payload?.recommendations?.trim()) {
         const hint =
           payload?.reason === 'empty_recommendations'
-            ? 'Сервер не смог сформировать текст. Попробуйте ещё раз.'
-            : 'Пустые рекомендации от сервера.'
+            ? 'Сервер не смог сформировать рекомендации. Попробуйте ещё раз.'
+            : 'Пустой ответ от сервера.'
         Alert.alert('Ошибка', hint)
         return
       }
 
-      navigation.navigate('Recommendations', { recommendations })
+      navigation.navigate('Recommendations', {
+        analysis: analysis ?? undefined,
+        recommendations: payload?.recommendations,
+        monthLabel: analysisPayload.periodLabel,
+      })
     } catch (e) {
       const message = await getEdgeFunctionErrorMessage(e, null, 'Не удалось получить анализ месяца.')
       Alert.alert('Ошибка анализа', message)
@@ -603,12 +525,15 @@ export function DashboardScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <PendingQuickCaptureHandler onSaved={() => void loadDashboard({ force: true })} />
       <Modal visible={isAnalyzing} transparent animationType="fade">
         <View style={styles.analyzeOverlay}>
           <View style={styles.analyzeOverlayCard}>
             <ActivityIndicator size="large" color={colors.accent} />
             <Text style={styles.analyzeOverlayTitle}>Анализируем…</Text>
-            <Text style={styles.analyzeOverlayHint}>Обычно 10–30 секунд</Text>
+            <Text style={styles.analyzeOverlayHint}>
+              {analysisPeriodHint(analysisPeriod)} · обычно 15–40 сек
+            </Text>
           </View>
         </View>
       </Modal>
@@ -625,92 +550,47 @@ export function DashboardScreen({ navigation }: Props) {
         }
       >
         <FadeSlideIn delay={0} duration={450}>
-          <View style={styles.hero}>
-            <KoshelLogo size={LOGO_SIZE.dashboard} color={colors.accent} style={styles.heroBrand} />
-            <Text style={styles.heroTagline}>Ваши деньги под контролем</Text>
-            <Text style={styles.heroSub}>Обзор за {formatMonthLabel(selectedMonth).toLowerCase()}</Text>
-          </View>
+          <DashboardAtmosphereHeader
+            month={selectedMonth}
+            onMonthChange={setSelectedMonth}
+          />
         </FadeSlideIn>
 
-        <FadeSlideIn delay={60}>
-          <MonthSwitcher value={selectedMonth} onChange={setSelectedMonth} />
+        <FadeSlideIn delay={50} duration={450}>
+          <DashboardOverviewHero
+            balance={balance}
+            totalIncome={totalIncome}
+            totalExpenses={totalExpenses}
+            recurringExpenseHint={recurringExpenseHint}
+            onOpenIncome={() => openHistory('income')}
+            onOpenExpenses={() => openHistory('expense')}
+          />
         </FadeSlideIn>
 
-      <FadeSlideIn delay={100}>
-        <View style={styles.summaryRow}>
-          <TouchableOpacity
-            style={styles.summaryCard}
-            onPress={() => openHistory('income')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.summaryLabel}>Доход</Text>
-            <Text style={styles.summaryValue}>₽{totalIncome.toLocaleString('ru-RU')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.summaryCard, styles.summaryCardAccent]}
-            onPress={() => openHistory('expense')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.summaryLabel}>Расходы</Text>
-            <Text style={styles.summaryValue}>₽{totalExpenses.toLocaleString('ru-RU')}</Text>
-            {recurringExpenseHint ? (
-              <Text style={styles.summaryHint}>{recurringExpenseHint}</Text>
-            ) : null}
-          </TouchableOpacity>
-        </View>
-      </FadeSlideIn>
-
-      <FadeSlideIn delay={120}>
-        <TouchableOpacity style={styles.capitalCard} onPress={openCapital} activeOpacity={0.85}>
-          <Text style={styles.summaryLabel}>Капитал</Text>
-          <Text style={styles.capitalValue}>₽{capitalTotal.toLocaleString('ru-RU')}</Text>
-          <Text style={styles.summaryHint}>
-            {activeCapitalCount > 0
-              ? `${activeCapitalCount} активов${hasLiveCapital ? ' · курсы обновлены' : ''} · не в расходах`
-              : 'Крипта, валюта, вклады — добавьте в профиле'}
-          </Text>
-        </TouchableOpacity>
-      </FadeSlideIn>
-
-      {monthlyBudget != null ? (
-        <MonthlyBudgetCard monthlyBudget={monthlyBudget} totalExpenses={totalExpenses} />
-      ) : (
-        <View style={styles.budgetHintCard}>
-          <Text style={styles.budgetHintText}>
-            Задайте лимит трат в разделе «Профиль» — на главной появится прогресс по расходам.
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Баланс месяца</Text>
-        <Text style={styles.budget}>₽{balance.toLocaleString('ru-RU')}</Text>
-        <Text style={styles.cardSubtitle}>
-          {totalIncome > 0
-            ? `Доходы минус расходы за ${formatMonthLabel(selectedMonth).toLowerCase()}`
-            : 'Добавьте доход на вкладке «Добавить»'}
-        </Text>
-      </View>
-
-      <HealthScoreCard score={healthScore} />
-      {showHeavyWidgets ? (
-        <FadeSlideIn delay={180} duration={500}>
-          <CategoryChart data={categorySummary} />
+        <FadeSlideIn delay={90}>
+          <DashboardLinksBar
+            capitalTotal={capitalTotal}
+            onImportStatement={openManualImport}
+            onOpenCapital={openCapital}
+            onOpenImports={() => navigation.navigate('StatementImports')}
+          />
         </FadeSlideIn>
-      ) : null}
 
-      <TouchableOpacity
-        style={[styles.analyzeButton, isAnalyzing && styles.analyzeButtonDisabled]}
-        onPress={() => void handleAnalyzeMonth()}
-        disabled={isAnalyzing}
-      >
-        <Text style={styles.analyzeButtonText}>
-          {isAnalyzing ? 'Анализируем…' : 'Анализ месяца с AI'}
-        </Text>
-        <Text style={styles.analyzeButtonHint}>
-          {isAnalyzing ? 'Подождите немного' : 'Рекомендации по вашим тратам'}
-        </Text>
-      </TouchableOpacity>
+        <FadeSlideIn delay={100} duration={500}>
+          <DashboardInsightsSection
+            monthlyBudget={monthlyBudget}
+            totalExpenses={totalExpenses}
+            healthScore={healthScore}
+            categorySummary={categorySummary}
+            showChart={showHeavyWidgets}
+            monthLabel={formatMonthLabel(selectedMonth)}
+            chartSubtitle={`за ${formatMonthGenitive(selectedMonth)}`}
+            analysisPeriod={analysisPeriod}
+            onPeriodChange={setAnalysisPeriod}
+            onAnalyze={() => void handleAnalyzeMonth()}
+            analyzing={isAnalyzing}
+          />
+        </FadeSlideIn>
       </ScrollView>
     </SafeAreaView>
   );

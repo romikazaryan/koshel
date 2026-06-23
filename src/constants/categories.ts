@@ -8,6 +8,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   'ЖКХ',
   'Одежда',
   'Здоровье',
+  'Онлайн',
   'Другое',
 ];
 

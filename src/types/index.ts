@@ -6,12 +6,13 @@ export type Category =
   | 'ЖКХ'
   | 'Одежда'
   | 'Здоровье'
+  | 'Онлайн'
   | 'Другое';
 
 export type IncomeCategory = 'Зарплата' | 'Подработка' | 'Подарок' | 'Возврат' | 'Другое';
 
-/** Откуда появилась транзакция. `bank` — для будущей синхронизации с API банка. */
-export type TransactionSource = 'manual' | 'voice' | 'receipt' | 'bank';
+/** Откуда появилась транзакция. `bank` / `broker` — синхронизация с API. */
+export type TransactionSource = 'manual' | 'voice' | 'receipt' | 'bank' | 'broker';
 
 export type TransactionKind = 'expense' | 'income';
 
@@ -44,6 +45,7 @@ export type CapitalAssetType =
   | 'real_estate'
   | 'stocks'
   | 'cash'
+  | 'bonds'
   | 'other';
 
 export type CapitalValuationMode = 'manual' | 'market';
@@ -58,9 +60,13 @@ export type CapitalAsset = {
   unit?: string;
   marketRateRub?: number;
   marketValueRub?: number;
+  /** Средняя цена покупки с брокера, ₽ за единицу. */
+  avgPurchaseRateRub?: number;
   marketFetchedAt?: string;
   isActive: boolean;
   note?: string;
+  financialConnectionId?: string;
+  externalPositionId?: string;
   createdAt: string;
   updatedAt: string;
 };

@@ -1,120 +1,222 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  AppState,
+  PanResponder,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { CAPITAL_ASSET_TYPES, getCapitalAssetTypeLabel } from '../constants/capitalTypes';
 import {
-  CRYPTO_QUICK_PICKS,
-  FX_UNITS,
-  STOCK_QUICK_PICKS,
+  CapitalAssetsPager,
+  type CapitalAssetsPagerHandle,
+} from '../components/capital/CapitalAssetsPager';
+import { CapitalCategoryCarousel } from '../components/capital/CapitalCategoryCarousel';
+import { CapitalHistoryPeriodToggle } from '../components/capital/CapitalHistoryPeriodToggle';
+import { CapitalMarketAssetRow } from '../components/capital/CapitalMarketAssetRow';
+import { CapitalSectionSummary } from '../components/capital/CapitalSectionSummary';
+import {
+  AddCapitalAssetSheet,
+  type AddCapitalAssetPayload,
+} from '../components/capital/AddCapitalAssetSheet';
+import { getCapitalAssetTypeLabel } from '../constants/capitalTypes';
+import {
+  buildAssetFilterOptions,
+  getHistoryPeriodDays,
+  type CapitalAssetFilter,
+  type CapitalHistoryPeriod,
+} from '../constants/capitalFilters';
+import {
+  canonicalizeCryptoUnit,
   getUnitSymbol,
-  normalizeStockTicker,
+  isCryptoMarketUnit,
+  isFxUnit,
+  resolveCoingeckoId,
+  resolveMoexTicker,
 } from '../constants/marketUnits';
-import { MarketSearchPicker } from '../components/MarketSearchPicker';
-import {
-  searchCoingeckoCoins,
-  searchMoexStocks,
-  type MarketSearchItem,
-} from '../lib/marketSearch';
 import {
   deleteCapitalAsset,
   fetchCapitalAssets,
+  getBrokerConnectionIds,
   getCapitalTotal,
   insertCapitalAsset,
+  insertOrMergeCapitalAsset,
+  isBrokerSyncedAsset,
   persistCapitalMarketSnapshots,
   setCapitalAssetActive,
   updateCapitalAssetAmount,
   updateCapitalAssetQuantity,
 } from '../lib/capital';
+import { requestTInvestSync } from '../lib/financialConnections';
 import {
   buildCapitalValuations,
   collectMarketSnapshots,
   formatQuantityLabel,
-  formatRateLabel,
-  formatValuationAge,
+  mergeFreshMoexValuations,
   type AssetValuation,
 } from '../lib/capitalValuation';
 import {
-  buildRateHistoryInsights,
-  formatRateHistoryInsight,
+  rebuildRateHistoryInsightsFromCache,
   recordValuationSnapshotsIfDue,
   type RateHistoryInsight,
 } from '../lib/capitalHistory';
-import { fetchMarketRateRub } from '../lib/marketRates';
-import type { CapitalAsset, CapitalAssetType } from '../types';
+import {
+  buildHistoryInsightsFromCache,
+  collectMarketAssetsForHistory,
+  loadCapitalHistoryInsights,
+  mergeHistoryInsights,
+  mergePeriodMetricsWithValuations,
+  prefetchIntradayStockPrevClose,
+} from '../lib/capitalPeriodMetrics';
+import { fetchMarketRateRub, prefetchCryptoHistoryCharts, prefetchMarketHistoryForPeriod } from '../lib/marketRates';
+import {
+  getMarketAssetDisplay,
+  aggregateAssetsSectionMetrics,
+  resolveAssetDynamicsInsight,
+} from '../lib/capitalAssetDisplay';
+import type { CapitalAsset } from '../types';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
-function usesMarketValuation(type: CapitalAssetType) {
-  return type === 'crypto' || type === 'cash' || type === 'stocks';
+function isCompactMarketAsset(item: CapitalAsset) {
+  return item.assetType === 'stocks' || item.assetType === 'crypto' || item.assetType === 'bonds';
 }
 
-function defaultUnitForType(type: CapitalAssetType): string | undefined {
-  if (type === 'crypto') return 'btc';
-  if (type === 'cash') return 'usd';
-  if (type === 'stocks') return 'vkco';
-  return undefined;
+function getAssetsForFilter(items: CapitalAsset[], filter: CapitalAssetFilter) {
+  const filtered = filter === 'all' ? items : items.filter((item) => item.assetType === filter);
+  return {
+    stockItems: filtered.filter((item) => item.assetType === 'stocks'),
+    bondItems: filtered.filter((item) => item.assetType === 'bonds'),
+    cryptoItems: filtered.filter((item) => item.assetType === 'crypto'),
+    manualItems: filtered.filter((item) => !isCompactMarketAsset(item)),
+  };
+}
+
+function isFilterPageEmpty(buckets: ReturnType<typeof getAssetsForFilter>) {
+  return (
+    buckets.stockItems.length === 0 &&
+    buckets.bondItems.length === 0 &&
+    buckets.cryptoItems.length === 0 &&
+    buckets.manualItems.length === 0
+  );
+}
+
+function filterPageShowsHistoryPeriod(items: CapitalAsset[], filter: CapitalAssetFilter) {
+  return items
+    .filter((item) => item.assetType === filter)
+    .some((item) => isCompactMarketAsset(item));
+}
+
+const SPOT_REFRESH_INTERVAL_MS = 120_000;
+const ALL_HISTORY_PERIODS: CapitalHistoryPeriod[] = ['d1', 'd365'];
+/** Фиксированный слот — высота не меняется при свайпе, только opacity. */
+const PERIOD_ROW_SLOT_HEIGHT = 28;
+
+function marketAssetExpectsIntradayDynamics(item: CapitalAsset) {
+  return (
+    item.isActive &&
+    (item.assetType === 'stocks' || item.assetType === 'crypto' || item.assetType === 'bonds')
+  );
 }
 
 export function CapitalScreen() {
   const { colors } = useAppTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const pagerScrollX = useRef(new Animated.Value(0)).current;
+  const assetsPagerRef = useRef<CapitalAssetsPagerHandle>(null);
   const [items, setItems] = useState<CapitalAsset[]>([]);
   const [valuations, setValuations] = useState<Record<string, AssetValuation>>({});
-  const [historyInsights, setHistoryInsights] = useState<Record<string, RateHistoryInsight>>({});
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [assetType, setAssetType] = useState<CapitalAssetType>('deposit');
-  const [marketUnit, setMarketUnit] = useState('btc');
-  const [marketSearchSelection, setMarketSearchSelection] = useState<MarketSearchItem | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [insightsByPeriod, setInsightsByPeriod] = useState<
+    Partial<Record<CapitalHistoryPeriod, Record<string, RateHistoryInsight>>>
+  >({});
+  const [addSheetVisible, setAddSheetVisible] = useState(false);
   const [isRefreshingRates, setIsRefreshingRates] = useState(false);
+  const [assetFilter, setAssetFilter] = useState<CapitalAssetFilter>('stocks');
+  const [historyPeriod, setHistoryPeriod] = useState<CapitalHistoryPeriod>('d1');
+  const [historyChartsReady, setHistoryChartsReady] = useState(false);
+  const [loadingPeriod, setLoadingPeriod] = useState<CapitalHistoryPeriod | null>(null);
+  const [ratesUpdatedAt, setRatesUpdatedAt] = useState<Date | null>(null);
+  const [ratesLabelTick, setRatesLabelTick] = useState(0);
+  const [assetPagerHeight, setAssetPagerHeight] = useState(0);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const valuationsRef = useRef(valuations);
+  valuationsRef.current = valuations;
+  const insightsByPeriodRef = useRef(insightsByPeriod);
+  insightsByPeriodRef.current = insightsByPeriod;
+  const historyPeriodRef = useRef(historyPeriod);
+  historyPeriodRef.current = historyPeriod;
+  const historyChartsReadyRef = useRef(historyChartsReady);
+  historyChartsReadyRef.current = historyChartsReady;
 
-  const isMarketForm = usesMarketValuation(assetType);
-  const quickPickOptions =
-    assetType === 'crypto'
-      ? CRYPTO_QUICK_PICKS
-      : assetType === 'cash'
-        ? FX_UNITS
-        : STOCK_QUICK_PICKS;
-
-  const resolvedMarketUnit = useMemo(() => {
-    if (marketSearchSelection) return marketSearchSelection.unit;
-    if (assetType === 'stocks') return normalizeStockTicker(marketUnit);
-    return marketUnit;
-  }, [assetType, marketSearchSelection, marketUnit]);
-
-  const handleMarketSearchSelect = useCallback((item: MarketSearchItem | null) => {
-    setMarketSearchSelection(item);
-    if (item) {
-      setMarketUnit('');
-      setName((prev) => (prev.trim() ? prev : item.name));
-    }
-  }, []);
-
-  const handleQuickPick = useCallback((value: string) => {
-    setMarketUnit(value);
-    setMarketSearchSelection(null);
-  }, []);
+  const historyInsights = useMemo(
+    () => insightsByPeriod[historyPeriod] ?? {},
+    [insightsByPeriod, historyPeriod]
+  );
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: c.background },
-      content: { padding: 20, paddingBottom: 40 },
+      screenBody: {
+        flex: 1,
+        paddingHorizontal: 20,
+      },
+      headerBlock: {
+        flexGrow: 0,
+        paddingTop: 20,
+        paddingBottom: 4,
+      },
       backButton: { marginBottom: 8 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
+      headerRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 20,
+      },
+      headerText: { flex: 1 },
       title: { fontSize: 28, fontWeight: '800', color: c.accent, marginBottom: 6 },
-      subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 20, lineHeight: 21 },
+      subtitle: { fontSize: 14, color: c.textMuted, lineHeight: 20 },
+      headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+      },
+      refreshIconButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: c.backgroundDeep,
+      },
+      refreshIconButtonDisabled: { opacity: 0.5 },
+      refreshIcon: {
+        fontSize: 22,
+        fontWeight: '500',
+        color: c.accentDark,
+        lineHeight: 24,
+      },
+      addButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: c.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...shadows.soft,
+      },
+      addButtonText: { color: c.textOnAccent, fontSize: 28, fontWeight: '300', lineHeight: 30 },
       card: {
         backgroundColor: c.surface,
         borderRadius: radii.lg,
@@ -162,17 +264,6 @@ export function CapitalScreen() {
         alignItems: 'center',
       },
       saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      refreshButton: {
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: radii.md,
-        paddingVertical: 12,
-        alignItems: 'center',
-        backgroundColor: c.surface,
-      },
-      refreshButtonText: { color: c.accentDark, fontWeight: '700', fontSize: 15 },
-      buttonDisabled: { opacity: 0.6 },
       itemRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -180,18 +271,19 @@ export function CapitalScreen() {
         gap: 12,
       },
       itemMain: { flex: 1 },
-      itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 4 },
+      itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 2 },
+      itemSource: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: c.textMuted,
+        marginBottom: 4,
+        letterSpacing: 0.2,
+      },
       itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
       itemAmount: { fontSize: 17, fontWeight: '800', color: c.text },
       itemActions: { alignItems: 'flex-end', gap: 8 },
       editLink: { color: c.accentDark, fontSize: 13, fontWeight: '600' },
       deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600' },
-      marketBadge: {
-        marginTop: 6,
-        fontSize: 12,
-        color: c.accentDark,
-        fontWeight: '600',
-      },
       empty: {
         padding: 20,
         alignItems: 'center',
@@ -220,9 +312,48 @@ export function CapitalScreen() {
       totalHeroValue: { fontSize: 30, fontWeight: '900', color: c.accent },
       totalHeroHint: { marginTop: 6, fontSize: 13, color: c.textMuted, lineHeight: 18 },
       formHint: { fontSize: 13, color: c.textMuted, lineHeight: 18, marginBottom: 10 },
-      historyUp: { fontSize: 12, color: c.accentDark, fontWeight: '600', marginTop: 4 },
-      historyDown: { fontSize: 12, color: c.danger, fontWeight: '600', marginTop: 4 },
-      historyFlat: { fontSize: 12, color: c.textMuted, fontWeight: '600', marginTop: 4 },
+      marketSection: { marginBottom: 16 },
+      marketSectionCard: {
+        backgroundColor: c.surface,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: c.borderLight,
+        overflow: 'hidden',
+        ...shadows.soft,
+      },
+      categoryChromeWrap: {
+        alignSelf: 'stretch',
+        alignItems: 'center',
+        marginTop: 4,
+        marginBottom: 12,
+      },
+      periodRowSlot: {
+        alignSelf: 'stretch',
+        height: PERIOD_ROW_SLOT_HEIGHT,
+        marginTop: 4,
+        justifyContent: 'center',
+      },
+      periodRowAnimated: {
+        alignSelf: 'stretch',
+      },
+      periodRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        alignSelf: 'stretch',
+      },
+      assetPagerWrap: {
+        flex: 1,
+        marginHorizontal: -20,
+      },
+      assetPageScroll: {
+        flex: 1,
+        width: '100%',
+      },
+      assetPageContent: {
+        paddingHorizontal: 20,
+        paddingBottom: 40,
+      },
     })
   );
 
@@ -231,45 +362,315 @@ export function CapitalScreen() {
       rows.map((row) => {
         const valuation = nextValuations[row.id];
         if (row.valuationMode !== 'market' || !valuation) return row;
+        if (
+          !valuation.rateRubPerUnit ||
+          (valuation.source !== 'moex' &&
+            valuation.source !== 'coingecko' &&
+            valuation.source !== 'cached')
+        ) {
+          return row;
+        }
         return {
           ...row,
           amount: valuation.valueRub,
           marketValueRub: valuation.valueRub,
-          marketRateRub: valuation.rateRubPerUnit ?? row.marketRateRub,
+          marketRateRub: valuation.rateRubPerUnit,
           marketFetchedAt: valuation.fetchedAt ?? row.marketFetchedAt,
         };
       }),
     []
   );
 
-  const refreshValuations = useCallback(async (rows: CapitalAsset[]) => {
-    const nextValuations = await buildCapitalValuations(rows);
-    const snapshots = collectMarketSnapshots(rows, nextValuations);
-    await persistCapitalMarketSnapshots(snapshots);
-    await recordValuationSnapshotsIfDue(rows, nextValuations);
-    const nextHistory = await buildRateHistoryInsights(rows, nextValuations);
-    setValuations(nextValuations);
-    setHistoryInsights(nextHistory);
-    setItems(mergeMarketFields(rows, nextValuations));
-    return nextValuations;
-  }, [mergeMarketFields]);
+  const applyFetchedValuations = useCallback(
+    (rows: CapitalAsset[], fetched: Record<string, AssetValuation>) => {
+      let merged: Record<string, AssetValuation> = {};
+      setValuations((prev) => {
+        merged = mergeFreshMoexValuations(prev, fetched);
+        return merged;
+      });
+      setItems((prev) => {
+        const rowIds = new Set(rows.map((row) => row.id));
+        const extras = prev.filter((row) => !rowIds.has(row.id));
+        return mergeMarketFields([...extras, ...rows], merged);
+      });
+      return merged;
+    },
+    [mergeMarketFields]
+  );
+
+  const patchPeriodInsights = useCallback(
+    (period: CapitalHistoryPeriod, insights: Record<string, RateHistoryInsight>) => {
+      setInsightsByPeriod((prev) => ({ ...prev, [period]: insights }));
+    },
+    []
+  );
+
+  const mergeValuationsIntoAllPeriodInsights = useCallback(
+    (mergedValuations: Record<string, AssetValuation>) => {
+      const rows = itemsRef.current;
+      setInsightsByPeriod((prev) => {
+        const next = { ...prev };
+        for (const period of ALL_HISTORY_PERIODS) {
+          const days = getHistoryPeriodDays(period);
+          if (period === 'd1') {
+            const fresh = buildHistoryInsightsFromCache(rows, mergedValuations, days, prev[period] ?? {});
+            next[period] = fresh;
+            continue;
+          }
+          if (next[period]) {
+            next[period] = mergePeriodMetricsWithValuations(next[period]!, mergedValuations);
+          }
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const loadPeriodInsights = useCallback(
+    async (
+      rows: CapitalAsset[],
+      nextValuations: Record<string, AssetValuation>,
+      period: CapitalHistoryPeriod
+    ) => {
+      const days = getHistoryPeriodDays(period);
+      const { insights } = await loadCapitalHistoryInsights(rows, nextValuations, days);
+      patchPeriodInsights(
+        period,
+        mergeHistoryInsights(insightsByPeriodRef.current[period] ?? {}, insights)
+      );
+      return insights;
+    },
+    [patchPeriodInsights]
+  );
+
+  const prefetchHistoryCache = useCallback(async (rows: CapitalAsset[]) => {
+    const market = collectMarketAssetsForHistory(rows);
+    const cryptoUnits = [
+      ...new Set(
+        market
+          .filter((item) => item.assetType === 'crypto' || isCryptoMarketUnit(item.unit!))
+          .map((item) => canonicalizeCryptoUnit(item.unit!))
+      ),
+    ];
+    const stockTickers = [
+      ...new Set(
+        market
+          .filter((item) => item.assetType === 'stocks' || item.assetType === 'bonds')
+          .map((item) => resolveMoexTicker(item.unit!))
+      ),
+    ];
+
+    const coingeckoIds = [
+      ...new Set(
+        cryptoUnits
+          .map((unit) => resolveCoingeckoId(unit))
+          .filter((id): id is string => Boolean(id))
+      ),
+    ];
+
+    await Promise.all([
+      prefetchMarketHistoryForPeriod(cryptoUnits, stockTickers, 1),
+      prefetchMarketHistoryForPeriod(cryptoUnits, stockTickers, 365),
+      coingeckoIds.length > 0 ? prefetchCryptoHistoryCharts(coingeckoIds) : null,
+    ]);
+  }, []);
+
+  const applyInsightsFromCache = useCallback(
+    (rows: CapitalAsset[], nextValuations: Record<string, AssetValuation>) => {
+      for (const period of ALL_HISTORY_PERIODS) {
+        const days = getHistoryPeriodDays(period);
+        patchPeriodInsights(
+          period,
+          buildHistoryInsightsFromCache(
+            rows,
+            nextValuations,
+            days,
+            insightsByPeriodRef.current[period] ?? {}
+          )
+        );
+      }
+      setHistoryChartsReady(true);
+    },
+    [patchPeriodInsights]
+  );
+
+  const hydrateHistoryInsights = useCallback(
+    async (rows: CapitalAsset[], nextValuations: Record<string, AssetValuation>) => {
+      await prefetchIntradayStockPrevClose(rows);
+      applyInsightsFromCache(rows, nextValuations);
+
+      try {
+        await prefetchHistoryCache(rows);
+        applyInsightsFromCache(rows, nextValuations);
+      } catch (error) {
+        console.warn('Capital history prefetch failed', error);
+      }
+
+      await loadPeriodInsights(rows, nextValuations, 'd1');
+      void loadPeriodInsights(rows, nextValuations, 'd365');
+    },
+    [prefetchHistoryCache, applyInsightsFromCache, loadPeriodInsights]
+  );
+
+  const refreshRatesOnly = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const rows = itemsRef.current;
+      const hasMarket = rows.some((item) => item.isActive && item.valuationMode === 'market');
+      if (!hasMarket) return;
+
+      if (!options?.silent) {
+        setIsRefreshingRates(true);
+      }
+
+      try {
+        const fetched = await buildCapitalValuations(rows, { forceMoex: true });
+        const merged = applyFetchedValuations(rows, fetched);
+        mergeValuationsIntoAllPeriodInsights(merged);
+        if (historyChartsReadyRef.current) {
+          applyInsightsFromCache(rows, merged);
+        }
+        setRatesUpdatedAt(new Date());
+
+        void persistCapitalMarketSnapshots(collectMarketSnapshots(rows, merged)).catch(
+          (error) => {
+            console.warn('persistCapitalMarketSnapshots failed', error);
+          }
+        );
+      } finally {
+        if (!options?.silent) {
+          setIsRefreshingRates(false);
+        }
+      }
+    },
+    [applyFetchedValuations, mergeValuationsIntoAllPeriodInsights, applyInsightsFromCache]
+  );
+
+  const refreshSpotValuations = useCallback(
+    async (rows: CapitalAsset[]) => {
+      const fetched = await buildCapitalValuations(rows, { forceMoex: true });
+      const merged = applyFetchedValuations(rows, fetched);
+
+      const snapshots = collectMarketSnapshots(rows, merged);
+      void persistCapitalMarketSnapshots(snapshots).catch((error) => {
+        console.warn('persistCapitalMarketSnapshots failed', error);
+      });
+      void recordValuationSnapshotsIfDue(rows, merged).catch((error) => {
+        console.warn('recordValuationSnapshotsIfDue failed', error);
+      });
+
+      return merged;
+    },
+    [applyFetchedValuations]
+  );
+
+  const handleRefreshRates = useCallback(async () => {
+    await refreshRatesOnly();
+  }, [refreshRatesOnly]);
+
+  const refreshValuations = useCallback(
+    async (rows: CapitalAsset[]) => {
+      const nextValuations = await refreshSpotValuations(rows);
+      if (historyChartsReadyRef.current) {
+        applyInsightsFromCache(rows, nextValuations);
+      }
+      void hydrateHistoryInsights(rows, nextValuations);
+      return nextValuations;
+    },
+    [refreshSpotValuations, applyInsightsFromCache, hydrateHistoryInsights]
+  );
 
   const load = useCallback(async () => {
     const rows = await fetchCapitalAssets();
     setItems(rows);
-    setIsRefreshingRates(true);
-    try {
-      await refreshValuations(rows);
-    } finally {
-      setIsRefreshingRates(false);
-    }
-  }, [refreshValuations]);
+
+    const nextValuations = await refreshSpotValuations(rows);
+    await prefetchIntradayStockPrevClose(rows);
+    setRatesUpdatedAt(new Date());
+    applyInsightsFromCache(rows, nextValuations);
+    void hydrateHistoryInsights(rows, nextValuations);
+  }, [refreshSpotValuations, applyInsightsFromCache, hydrateHistoryInsights]);
+
+  const handleHistoryPeriodChange = useCallback(
+    (period: CapitalHistoryPeriod) => {
+      setHistoryPeriod(period);
+
+      const rows = itemsRef.current;
+      const vals = valuationsRef.current;
+      const days = getHistoryPeriodDays(period);
+      const existing = insightsByPeriodRef.current[period] ?? {};
+
+      if (historyChartsReady) {
+        const rebuilt = rebuildRateHistoryInsightsFromCache(rows, vals, days, existing);
+        patchPeriodInsights(period, rebuilt);
+
+        const market = collectMarketAssetsForHistory(rows);
+        const missingCount = market.filter((asset) => !rebuilt[asset.id]).length;
+        if (missingCount > 0) {
+          void loadPeriodInsights(rows, vals, period);
+        }
+        return;
+      }
+
+      setLoadingPeriod(period);
+      void (async () => {
+        try {
+          await prefetchHistoryCache(rows);
+          setHistoryChartsReady(true);
+          patchPeriodInsights(
+            period,
+            rebuildRateHistoryInsightsFromCache(rows, vals, days, existing)
+          );
+          await loadPeriodInsights(rows, vals, period);
+        } finally {
+          setLoadingPeriod(null);
+        }
+      })();
+    },
+    [historyChartsReady, prefetchHistoryCache, patchPeriodInsights, loadPeriodInsights]
+  );
+
+  useEffect(() => {
+    if (!ratesUpdatedAt) return;
+    const id = setInterval(() => setRatesLabelTick((tick) => tick + 1), 15_000);
+    return () => clearInterval(id);
+  }, [ratesUpdatedAt]);
+
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const refreshRatesOnlyRef = useRef(refreshRatesOnly);
+  refreshRatesOnlyRef.current = refreshRatesOnly;
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load])
+      void loadRef.current();
+
+      const interval = setInterval(() => {
+        void refreshRatesOnlyRef.current({ silent: true });
+      }, SPOT_REFRESH_INTERVAL_MS);
+
+      const appStateSub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') {
+          void refreshRatesOnlyRef.current({ silent: true });
+        }
+      });
+
+      return () => {
+        clearInterval(interval);
+        appStateSub.remove();
+      };
+    }, [])
   );
+
+  const ratesUpdatedLabel = useMemo(() => {
+    if (!ratesUpdatedAt) return isRefreshingRates ? 'Обновляем котировки…' : '';
+    if (isRefreshingRates) return 'Обновляем котировки…';
+    const diffSec = Math.floor((Date.now() - ratesUpdatedAt.getTime()) / 1000);
+    if (diffSec < 10) return 'Котировки обновлены только что · авто каждые 2 мин';
+    if (diffSec < 60) return `Котировки обновлены ${diffSec} с назад · авто каждые 2 мин`;
+    const min = Math.floor(diffSec / 60);
+    return `Котировки обновлены ${min} мин назад · авто каждые 2 мин`;
+  }, [ratesUpdatedAt, isRefreshingRates, ratesLabelTick]);
 
   const activeTotal = useMemo(
     () => getCapitalTotal(items, valuations),
@@ -281,95 +682,157 @@ export function CapitalScreen() {
     [items]
   );
 
-  const handleTypeChange = (type: CapitalAssetType) => {
-    setAssetType(type);
-    const unit = defaultUnitForType(type);
-    if (unit) {
-      setMarketUnit(unit);
-      setMarketSearchSelection(null);
-    }
-  };
+  const brokerConnectionIds = useMemo(() => getBrokerConnectionIds(items), [items]);
 
-  const handleAdd = async () => {
-    const trimmedName = name.trim();
+  const assetFilterOptions = useMemo(() => buildAssetFilterOptions(items), [items]);
+  const filterPages = useMemo(
+    () => assetFilterOptions.map((option) => option.value),
+    [assetFilterOptions]
+  );
 
-    if (!trimmedName) {
-      Alert.alert('Укажите название', 'Например: Bitcoin, Доллары, Вклад в Сбере.');
-      return;
-    }
+  const activeFilterIndex = useMemo(() => {
+    const index = assetFilterOptions.findIndex((option) => option.value === assetFilter);
+    return index >= 0 ? index : 0;
+  }, [assetFilterOptions, assetFilter]);
 
-    setIsSaving(true);
+  const handlePagerPageChange = useCallback(
+    (index: number) => {
+      const option = assetFilterOptions[index];
+      if (option) setAssetFilter(option.value);
+    },
+    [assetFilterOptions]
+  );
+
+  const handleCategorySelect = useCallback(
+    (filter: CapitalAssetFilter) => {
+      const index = assetFilterOptions.findIndex((option) => option.value === filter);
+      if (index >= 0) assetsPagerRef.current?.scrollToPage(index);
+    },
+    [assetFilterOptions]
+  );
+
+  const activeFilterIndexRef = useRef(activeFilterIndex);
+  activeFilterIndexRef.current = activeFilterIndex;
+  const filterPagesLengthRef = useRef(filterPages.length);
+  filterPagesLengthRef.current = filterPages.length;
+
+  const categorySwipePan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 12 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+      onPanResponderRelease: (_, gesture) => {
+        const pages = filterPagesLengthRef.current;
+        if (pages <= 1) return;
+        const current = activeFilterIndexRef.current;
+        if (gesture.dx < -48) {
+          const next = Math.min(current + 1, pages - 1);
+          if (next !== current) assetsPagerRef.current?.scrollToPage(next);
+        } else if (gesture.dx > 48) {
+          const next = Math.max(current - 1, 0);
+          if (next !== current) assetsPagerRef.current?.scrollToPage(next);
+        }
+      },
+    })
+  ).current;
+
+  const handleBrokerSync = useCallback(async () => {
+    if (brokerConnectionIds.length === 0) return;
+
     try {
-      if (isMarketForm) {
-        const qty = Number(quantity.replace(',', '.'));
-        if (!qty || qty <= 0) {
-          const qtyHint =
-            assetType === 'stocks'
-              ? 'Введите количество акций.'
-              : 'Введите, сколько монет или валюты у вас есть.';
-          Alert.alert('Укажите количество', qtyHint);
-          return;
-        }
+      const results = await Promise.all(
+        brokerConnectionIds.map((connectionId) => requestTInvestSync(connectionId))
+      );
+      const failed = results.find((result) => !result.ok);
+      if (failed) {
+        Alert.alert('Синхронизация', failed.message ?? 'Не удалось обновить портфель T-Invest');
+        return;
+      }
+      await load();
+      Alert.alert('Готово', results[0]?.message ?? 'Портфель T-Invest обновлён');
+    } catch (error) {
+      Alert.alert(
+        'Ошибка',
+        error instanceof Error ? error.message : 'Не удалось синхронизировать T-Invest'
+      );
+    }
+  }, [brokerConnectionIds, load]);
 
-        const unit = resolvedMarketUnit;
-        if (!unit) {
-          Alert.alert(
-            'Выберите инструмент',
-            assetType === 'stocks'
-              ? 'Начните вводить название или тикер — например «ВК» или VKCO.'
-              : 'Выберите монету из списка или найдите через поиск.'
-          );
-          return;
-        }
+  useEffect(() => {
+    if (assetFilterOptions.length === 0) return;
+    const stillAvailable = assetFilterOptions.some((option) => option.value === assetFilter);
+    if (!stillAvailable || assetFilter === 'all') {
+      setAssetFilter(assetFilterOptions[0].value);
+    }
+  }, [assetFilter, assetFilterOptions]);
 
-        const rate = await fetchMarketRateRub(unit, assetType);
-        if (rate == null || rate <= 0) {
-          Alert.alert('Курс недоступен', 'Не удалось получить актуальную цену. Попробуйте позже.');
-          return;
-        }
+  const handleAddAsset = async (payload: AddCapitalAssetPayload) => {
+    if (payload.kind === 'market') {
+      const rate = await fetchMarketRateRub(payload.unit, payload.assetType);
+      if (rate == null || rate <= 0) {
+        throw new Error('Не удалось получить актуальную цену. Попробуйте позже.');
+      }
 
-        const valueRub = Math.round(qty * rate * 100) / 100;
-        const fetchedAt = new Date().toISOString();
-        const created = await insertCapitalAsset({
-          name: trimmedName,
-          assetType,
+      const valueRub = Math.round(payload.quantity * rate * 100) / 100;
+      const fetchedAt = new Date().toISOString();
+      const { asset, merged } = await insertOrMergeCapitalAsset(
+        {
+          name: payload.name,
+          assetType: payload.assetType,
           valuationMode: 'market',
           amount: valueRub,
-          quantity: qty,
-          unit,
+          quantity: payload.quantity,
+          unit: payload.unit,
           marketRateRub: rate,
           marketValueRub: valueRub,
           marketFetchedAt: fetchedAt,
-        });
-        const next = [created, ...items];
-        setItems(next);
-        await refreshValuations(next);
-        setName('');
-        setQuantity('');
-        setMarketSearchSelection(null);
-      } else {
-        const value = Number(amount.replace(',', '.'));
-        if (!value || value <= 0) {
-          Alert.alert('Укажите сумму', 'Введите текущую стоимость актива в рублях.');
-          return;
-        }
-        const created = await insertCapitalAsset({
-          name: trimmedName,
-          assetType,
-          valuationMode: 'manual',
-          amount: value,
-        });
-        setItems((prev) => [created, ...prev]);
-        setName('');
-        setAmount('');
-        setAssetType('deposit');
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось сохранить.';
-      Alert.alert('Ошибка', message);
-    } finally {
-      setIsSaving(false);
+        },
+        items
+      );
+      const next = merged
+        ? items.map((row) => (row.id === asset.id ? asset : row))
+        : [asset, ...items];
+
+      const source: AssetValuation['source'] =
+        payload.assetType === 'crypto'
+          ? 'coingecko'
+          : payload.assetType === 'stocks'
+            ? 'moex'
+            : isFxUnit(payload.unit)
+              ? 'cbr'
+              : 'manual';
+      const optimistic: AssetValuation = {
+        valueRub,
+        rateRubPerUnit: rate,
+        quantity: payload.quantity,
+        unit: payload.unit,
+        unitSymbol: getUnitSymbol(payload.unit),
+        source,
+        fetchedAt,
+      };
+
+      setItems(next);
+      itemsRef.current = next;
+      setValuations((prev) => mergeFreshMoexValuations(prev, { [asset.id]: optimistic }));
+      setRatesUpdatedAt(new Date());
+
+      void persistCapitalMarketSnapshots(
+        collectMarketSnapshots(next, { [asset.id]: optimistic })
+      ).catch((error) => {
+        console.warn('persistCapitalMarketSnapshots failed', error);
+      });
+
+      // Тот же полный цикл обновления, что и раньше — только в фоне, без блокировки кнопки.
+      void refreshValuations(next);
+      return;
     }
+
+    const created = await insertCapitalAsset({
+      name: payload.name,
+      assetType: payload.assetType,
+      valuationMode: 'manual',
+      amount: payload.amount,
+    });
+    setItems((prev) => [created, ...prev]);
   };
 
   const handleToggle = (item: CapitalAsset, next: boolean) => {
@@ -385,6 +848,18 @@ export function CapitalScreen() {
   };
 
   const handleUpdate = (item: CapitalAsset) => {
+    if (isBrokerSyncedAsset(item)) {
+      Alert.alert(
+        'Брокерский актив',
+        'Количество обновляется из T-Invest. Нажмите «Синхронизировать T-Invest» на экране капитала.',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          { text: 'Синхронизировать', onPress: () => void handleBrokerSync() },
+        ]
+      );
+      return;
+    }
+
     if (!Alert.prompt) {
       Alert.alert('Обновление', 'Удалите актив и добавьте заново с новым значением.');
       return;
@@ -470,237 +945,364 @@ export function CapitalScreen() {
     ]);
   };
 
+  const openAssetActions = (item: CapitalAsset) => {
+    const { title } = getMarketAssetDisplay(item);
+    const broker = isBrokerSyncedAsset(item);
+    const actions = broker
+      ? [
+          {
+            text: 'Обновить из T-Invest',
+            onPress: () => void handleBrokerSync(),
+          },
+        ]
+      : [
+          {
+            text:
+              isCompactMarketAsset(item) || item.valuationMode === 'market'
+                ? 'Изменить количество'
+                : 'Обновить сумму',
+            onPress: () => handleUpdate(item),
+          },
+        ];
+
+    Alert.alert(title, undefined, [
+      ...actions,
+      {
+        text: item.isActive ? 'Скрыть из суммы' : 'Учитывать в капитале',
+        onPress: () => handleToggle(item, !item.isActive),
+      },
+      { text: 'Удалить', style: 'destructive', onPress: () => handleDelete(item) },
+      { text: 'Отмена', style: 'cancel' },
+    ]);
+  };
+
+  const hasAnyPeriodPage = useMemo(
+    () => filterPages.some((page) => filterPageShowsHistoryPeriod(items, page)),
+    [filterPages, items]
+  );
+
+  const periodScrollReveal = useMemo(() => {
+    if (filterPages.length === 0 || screenWidth <= 0) return null;
+    if (filterPages.length === 1) {
+      return filterPageShowsHistoryPeriod(items, filterPages[0]) ? 1 : 0;
+    }
+
+    const inputRange = filterPages.map((_, index) => index * screenWidth);
+    const outputRange = filterPages.map((page) =>
+      filterPageShowsHistoryPeriod(items, page) ? 1 : 0
+    );
+
+    return pagerScrollX.interpolate({
+      inputRange,
+      outputRange,
+      extrapolate: 'clamp',
+    });
+  }, [filterPages, items, pagerScrollX, screenWidth]);
+
+  const periodVisibleForInteraction = useMemo(
+    () => filterPageShowsHistoryPeriod(items, assetFilter),
+    [items, assetFilter]
+  );
+
+  const renderFixedCategoryChrome = () => {
+    const hasCategories = assetFilterOptions.length > 0;
+    if (!hasCategories && !hasAnyPeriodPage) return null;
+
+    const periodOpacityStyle =
+      periodScrollReveal == null
+        ? null
+        : typeof periodScrollReveal === 'number'
+          ? { opacity: periodScrollReveal }
+          : { opacity: periodScrollReveal };
+
+    return (
+      <View style={styles.categoryChromeWrap} {...categorySwipePan.panHandlers}>
+        {hasCategories ? (
+          <CapitalCategoryCarousel
+            options={assetFilterOptions}
+            value={assetFilter}
+            onChange={handleCategorySelect}
+            scrollX={pagerScrollX}
+            pageWidth={screenWidth}
+          />
+        ) : null}
+        {hasAnyPeriodPage && periodOpacityStyle ? (
+          <View
+            style={styles.periodRowSlot}
+            pointerEvents={periodVisibleForInteraction ? 'box-none' : 'none'}
+          >
+            <Animated.View style={[styles.periodRowAnimated, periodOpacityStyle]}>
+              <View style={styles.periodRow}>
+                <CapitalHistoryPeriodToggle
+                  value={historyPeriod}
+                  onChange={handleHistoryPeriodChange}
+                />
+              </View>
+            </Animated.View>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderMarketSection = (sectionItems: CapitalAsset[]) => {
+    if (sectionItems.length === 0) return null;
+
+    const sectionMetrics = aggregateAssetsSectionMetrics(
+      sectionItems,
+      valuations,
+      historyInsights,
+      historyPeriod
+    );
+    const sectionHistoryLoading =
+      loadingPeriod === historyPeriod &&
+      sectionMetrics.dynamicsExpected > sectionMetrics.dynamicsResolved;
+
+    return (
+      <View style={styles.marketSection}>
+        <View style={styles.marketSectionCard}>
+          {sectionMetrics.activeCount > 0 ? (
+            <CapitalSectionSummary
+              metrics={sectionMetrics}
+              historyLoading={sectionHistoryLoading}
+            />
+          ) : null}
+          {sectionItems.map((item, index) => {
+            const resolvedInsight = resolveAssetDynamicsInsight(
+              item,
+              valuations[item.id],
+              historyInsights[item.id],
+              historyPeriod
+            );
+            const expectsDynamics = marketAssetExpectsIntradayDynamics(item);
+            const rowHistoryLoading =
+              loadingPeriod === historyPeriod && expectsDynamics && !resolvedInsight;
+
+            return (
+            <CapitalMarketAssetRow
+              key={item.id}
+              item={item}
+              valuation={valuations[item.id]}
+              history={resolvedInsight}
+              historyLoading={rowHistoryLoading}
+              isLast={index === sectionItems.length - 1}
+              onPress={() => openAssetActions(item)}
+            />
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  const renderAssetsPage = (filter: CapitalAssetFilter) => {
+      const buckets = getAssetsForFilter(items, filter);
+      const manualMetrics =
+        buckets.manualItems.length > 0
+          ? aggregateAssetsSectionMetrics(
+              buckets.manualItems,
+              valuations,
+              historyInsights,
+              historyPeriod
+            )
+          : null;
+
+      if (isFilterPageEmpty(buckets)) {
+        return (
+          <ScrollView
+            style={styles.assetPageScroll}
+            contentContainerStyle={styles.assetPageContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>В этой категории пока нет активов.</Text>
+            </View>
+          </ScrollView>
+        );
+      }
+
+      return (
+        <ScrollView
+          style={styles.assetPageScroll}
+          contentContainerStyle={styles.assetPageContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+        >
+          {renderMarketSection(buckets.stockItems)}
+          {renderMarketSection(buckets.bondItems)}
+          {renderMarketSection(buckets.cryptoItems)}
+
+          {buckets.manualItems.length > 0 ? (
+            <>
+              {manualMetrics && manualMetrics.activeCount > 0 ? (
+                <View style={[styles.marketSection, { marginBottom: 12 }]}>
+                  <View style={styles.marketSectionCard}>
+                    <CapitalSectionSummary metrics={manualMetrics} />
+                  </View>
+                </View>
+              ) : null}
+              {buckets.manualItems.map((item) => {
+                const valuation = valuations[item.id];
+                const displayRub = valuation?.valueRub ?? item.amount;
+                const liveUnit = item.unit;
+                const liveQuantity = item.quantity;
+                const isLiveAsset =
+                  item.valuationMode === 'market' ||
+                  (item.assetType === 'cash' && liveQuantity && liveUnit);
+                const { title, sourceLabel } = getMarketAssetDisplay(item);
+
+                return (
+                  <View key={item.id} style={styles.card}>
+                    <View style={styles.itemRow}>
+                      <View style={styles.itemMain}>
+                        <Text style={styles.itemName}>{title}</Text>
+                        {sourceLabel ? (
+                          <Text style={styles.itemSource}>{sourceLabel}</Text>
+                        ) : null}
+                        <Text style={styles.itemMeta}>
+                          {getCapitalAssetTypeLabel(item.assetType)}
+                        </Text>
+                        {isLiveAsset && liveUnit && liveQuantity ? (
+                          <Text style={styles.itemMeta}>
+                            {formatQuantityLabel(liveQuantity, liveUnit)}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.itemAmount}>
+                        ₽{displayRub.toLocaleString('ru-RU')}
+                      </Text>
+                    </View>
+                    <View style={[styles.itemRow, { marginTop: 12 }]}>
+                      <Text style={styles.itemMeta}>
+                        {item.isActive ? 'Учитывается в капитале' : 'Скрыт из суммы'}
+                      </Text>
+                      <View style={styles.itemActions}>
+                        <Switch
+                          value={item.isActive}
+                          onValueChange={(next) => handleToggle(item, next)}
+                          trackColor={{ false: colors.border, true: colors.accentSoft }}
+                          thumbColor={item.isActive ? colors.accent : colors.textMuted}
+                        />
+                        <TouchableOpacity onPress={() => handleUpdate(item)}>
+                          <Text style={styles.editLink}>
+                            {item.valuationMode === 'market'
+                              ? 'Изменить количество'
+                              : 'Обновить сумму'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(item)}>
+                          <Text style={styles.deleteLink}>Удалить</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </>
+          ) : null}
+        </ScrollView>
+      );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Капитал</Text>
-        <Text style={styles.subtitle}>
-          Крипта, валюта и акции переоцениваются по рынку. Остальные активы — сумма, которую вы
-          указываете сами.
-        </Text>
-
-        {activeTotal > 0 ? (
-          <View style={styles.totalHero}>
-            <Text style={styles.totalHeroLabel}>Всего активов</Text>
-            <Text style={styles.totalHeroValue}>₽{activeTotal.toLocaleString('ru-RU')}</Text>
-            {hasLiveAssets ? (
-              <Text style={styles.totalHeroHint}>
-                Включая актуальные курсы крипты, валют и акций MOEX
+      <View style={styles.screenBody}>
+        <View style={styles.headerBlock}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Капитал</Text>
+              <Text style={styles.subtitle}>
+                Все активы в одном месте — сумма, живые курсы и динамика за период.
               </Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {hasLiveAssets ? (
-          <TouchableOpacity
-            style={[styles.refreshButton, isRefreshingRates && styles.buttonDisabled]}
-            onPress={() => void load()}
-            disabled={isRefreshingRates}
-          >
-            {isRefreshingRates ? (
-              <ActivityIndicator color={colors.accent} />
-            ) : (
-              <Text style={styles.refreshButtonText}>Обновить курсы</Text>
-            )}
-          </TouchableOpacity>
-        ) : null}
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Добавить актив</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Название"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-          />
-          <View style={styles.types}>
-            {CAPITAL_ASSET_TYPES.map((type) => (
+            </View>
+            <View style={styles.headerActions}>
+              {hasLiveAssets ? (
+                <TouchableOpacity
+                  style={[
+                    styles.refreshIconButton,
+                    isRefreshingRates && styles.refreshIconButtonDisabled,
+                  ]}
+                  onPress={() => void handleRefreshRates()}
+                  disabled={isRefreshingRates}
+                  accessibilityRole="button"
+                  accessibilityLabel={ratesUpdatedLabel || 'Обновить курсы'}
+                >
+                  {isRefreshingRates ? (
+                    <ActivityIndicator color={colors.accent} size="small" />
+                  ) : (
+                    <Text style={styles.refreshIcon}>↻</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
-                key={type.value}
-                style={[styles.chip, assetType === type.value && styles.chipActive]}
-                onPress={() => handleTypeChange(type.value)}
+                style={styles.addButton}
+                onPress={() => setAddSheetVisible(true)}
+                accessibilityLabel="Добавить актив"
               >
-                <Text style={[styles.chipText, assetType === type.value && styles.chipTextActive]}>
-                  {type.label}
-                </Text>
+                <Text style={styles.addButtonText}>+</Text>
               </TouchableOpacity>
-            ))}
+            </View>
           </View>
 
-          {isMarketForm ? (
-            <>
-              <Text style={styles.formHint}>
-                {assetType === 'crypto'
-                  ? 'Популярные монеты — кнопками ниже. Остальные — через поиск CoinGecko.'
-                  : assetType === 'cash'
-                    ? 'Укажите сумму в валюте — курс возьмём с сайта ЦБ РФ.'
-                    : 'Начните вводить название или тикер — подсказки придут с MOEX (ВК → VKCO).'}
-              </Text>
-              <View style={styles.types}>
-                {quickPickOptions.map((unit) => {
-                  const isActive =
-                    marketUnit === unit.value &&
-                    (assetType === 'cash' || !marketSearchSelection);
-                  return (
-                    <TouchableOpacity
-                      key={unit.value}
-                      style={[styles.chip, isActive && styles.chipActive]}
-                      onPress={() => handleQuickPick(unit.value)}
-                    >
-                      <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                        {unit.symbol}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {assetType === 'crypto' ? (
-                <MarketSearchPicker
-                  placeholder="Другая монета (PEPE, WLD, ATOM…)"
-                  selected={marketSearchSelection}
-                  onSelect={handleMarketSearchSelect}
-                  onSearch={searchCoingeckoCoins}
-                  disabled={isSaving}
-                />
+          {activeTotal > 0 ? (
+            <View style={styles.totalHero}>
+              <Text style={styles.totalHeroLabel}>Всего активов</Text>
+              <Text style={styles.totalHeroValue}>₽{activeTotal.toLocaleString('ru-RU')}</Text>
+              {hasLiveAssets ? (
+                <Text style={styles.totalHeroHint}>
+                  Акции — MOEX · крипта — CoinGecko · валюта — ЦБ РФ
+                </Text>
               ) : null}
-              {assetType === 'stocks' ? (
-                <MarketSearchPicker
-                  placeholder="Поиск акции (ВК, Сбер, TATN…)"
-                  selected={marketSearchSelection}
-                  onSelect={handleMarketSearchSelect}
-                  onSearch={searchMoexStocks}
-                  disabled={isSaving}
-                />
-              ) : null}
-              <TextInput
-                style={styles.input}
-                placeholder={
-                  assetType === 'stocks' || assetType === 'crypto'
-                    ? `Количество ${getUnitSymbol(resolvedMarketUnit) || '…'}`
-                    : `Количество ${quickPickOptions.find((u) => u.value === marketUnit)?.symbol ?? ''}`
-                }
-                placeholderTextColor={colors.textMuted}
-                keyboardType="decimal-pad"
-                value={quantity}
-                onChangeText={setQuantity}
-              />
-            </>
-          ) : (
-            <TextInput
-              style={styles.input}
-              placeholder="Текущая стоимость ₽"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-            />
-          )}
+            </View>
+          ) : null}
 
-          <TouchableOpacity
-            style={[styles.saveButton, isSaving && styles.buttonDisabled]}
-            onPress={() => void handleAdd()}
-            disabled={isSaving}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSaving ? 'Сохраняю…' : 'Добавить'}
-            </Text>
-          </TouchableOpacity>
+          {items.length > 0 ? renderFixedCategoryChrome() : null}
         </View>
 
-        <Text style={styles.cardLabel}>Ваши активы</Text>
         {items.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>Пока нет активов. Добавьте первый выше.</Text>
-          </View>
+          <ScrollView
+            contentContainerStyle={styles.assetPageContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>
+                Пока нет активов. Нажмите «+» в правом верхнем углу, чтобы добавить первый.
+              </Text>
+            </View>
+          </ScrollView>
         ) : (
-          items.map((item) => {
-            const valuation = valuations[item.id];
-            const history = historyInsights[item.id];
-            const displayRub = valuation?.valueRub ?? item.amount;
-            const liveUnit = item.unit;
-            const liveQuantity = item.quantity;
-            const isLiveAsset =
-              item.valuationMode === 'market' ||
-              ((item.assetType === 'crypto' ||
-                item.assetType === 'cash' ||
-                item.assetType === 'stocks') &&
-                liveQuantity &&
-                liveUnit);
-            const historyStyle =
-              history && history.changePercent > 0
-                ? styles.historyUp
-                : history && history.changePercent < 0
-                  ? styles.historyDown
-                  : styles.historyFlat;
-            return (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.itemRow}>
-                  <View style={styles.itemMain}>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                    <Text style={styles.itemMeta}>{getCapitalAssetTypeLabel(item.assetType)}</Text>
-                    {isLiveAsset && liveUnit && liveQuantity ? (
-                      <>
-                        <Text style={styles.marketBadge}>
-                          {item.assetType === 'stocks'
-                            ? `${liveQuantity.toLocaleString('ru-RU', { maximumFractionDigits: 4 })} акц. ${getUnitSymbol(liveUnit)}`
-                            : formatQuantityLabel(liveQuantity, liveUnit)}
-                        </Text>
-                        {valuation?.rateRubPerUnit ? (
-                          <Text style={styles.itemMeta}>
-                            {formatRateLabel(valuation.rateRubPerUnit, liveUnit, item.assetType)}
-                          </Text>
-                        ) : null}
-                        {valuation?.fetchedAt ? (
-                          <Text style={styles.itemMeta}>
-                            Обновлено {formatValuationAge(valuation.fetchedAt)}
-                          </Text>
-                        ) : null}
-                        {history ? (
-                          <Text style={historyStyle}>{formatRateHistoryInsight(history)}</Text>
-                        ) : isRefreshingRates ? (
-                          <Text style={styles.itemMeta}>Считаем динамику за 7 дней…</Text>
-                        ) : (
-                          <Text style={styles.itemMeta}>
-                            Динамика за 7 дней недоступна — нажмите «Обновить курсы»
-                          </Text>
-                        )}
-                        {valuation?.error ? (
-                          <Text style={[styles.itemMeta, { color: colors.danger }]}>
-                            {valuation.error}
-                          </Text>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </View>
-                  <Text style={styles.itemAmount}>₽{displayRub.toLocaleString('ru-RU')}</Text>
-                </View>
-                <View style={[styles.itemRow, { marginTop: 12 }]}>
-                  <Text style={styles.itemMeta}>
-                    {item.isActive ? 'Учитывается в капитале' : 'Скрыт из суммы'}
-                  </Text>
-                  <View style={styles.itemActions}>
-                    <Switch
-                      value={item.isActive}
-                      onValueChange={(next) => handleToggle(item, next)}
-                      trackColor={{ false: colors.border, true: colors.accentSoft }}
-                      thumbColor={item.isActive ? colors.accent : colors.textMuted}
-                    />
-                    <TouchableOpacity onPress={() => handleUpdate(item)}>
-                      <Text style={styles.editLink}>
-                        {item.valuationMode === 'market' ? 'Изменить количество' : 'Обновить сумму'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item)}>
-                      <Text style={styles.deleteLink}>Удалить</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })
+          <View
+            style={styles.assetPagerWrap}
+            onLayout={(event) => {
+              const height = Math.round(event.nativeEvent.layout.height);
+              if (height > 0 && height !== assetPagerHeight) {
+                setAssetPagerHeight(height);
+              }
+            }}
+          >
+            <CapitalAssetsPager
+              ref={assetsPagerRef}
+              pages={filterPages}
+              pageWidth={screenWidth}
+              pageHeight={assetPagerHeight}
+              activeIndex={activeFilterIndex}
+              onPageChange={handlePagerPageChange}
+              scrollX={pagerScrollX}
+              renderPage={(filter) => renderAssetsPage(filter)}
+            />
+          </View>
         )}
-      </ScrollView>
+      </View>
+
+      <AddCapitalAssetSheet
+        visible={addSheetVisible}
+        onClose={() => setAddSheetVisible(false)}
+        onSubmit={handleAddAsset}
+      />
     </SafeAreaView>
   );
 }

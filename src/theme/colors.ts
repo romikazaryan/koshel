@@ -1,4 +1,9 @@
-/** Палитра koshel: глубокий синий + изумруд (светлая и тёмная темы). */
+/**
+ * Koshel — палитра:
+ * светлая «ультрамарин по персику» (#120A8F + #FFDAB9),
+ * тёмная «лавандовый по фиолетовому» (#C8BEFA + #151130).
+ * Доход/расход — семантические бирюза и rose.
+ */
 
 export type ColorPalette = {
   background: string;
@@ -9,6 +14,15 @@ export type ColorPalette = {
   navyMid: string;
   primary: string;
   primarySoft: string;
+  income: string;
+  incomeDark: string;
+  incomeSoft: string;
+  incomeMuted: string;
+  expense: string;
+  expenseDark: string;
+  expenseSoft: string;
+  expenseMuted: string;
+  /** Бренд: табы, CTA, лого */
   accent: string;
   accentDark: string;
   accentSoft: string;
@@ -28,104 +42,150 @@ export type ColorPalette = {
   success: string;
   successSoft: string;
   tabBar: string;
+  /** Акцент активной вкладки (Telegram blue) */
+  tabAccent: string;
   tabActive: string;
   tabInactive: string;
   overlay: string;
   shadow: string;
 };
 
+/** Светлая: ультрамариновый акцент на персиковом фоне. */
+const lightBrand = {
+  primary: '#120A8F',
+  primarySoft: '#E6E3F7',
+  accent: '#120A8F',
+  accentDark: '#0C0668',
+  accentSoft: '#E6E3F7',
+  accentMuted: '#B3AEDD',
+};
+
+const lightIncome = {
+  income: '#0F766E',
+  incomeDark: '#0D5C56',
+  incomeSoft: '#F0FDFA',
+  incomeMuted: '#99F6E4',
+};
+
+const lightExpense = {
+  expense: '#E11D48',
+  expenseDark: '#BE123C',
+  expenseSoft: '#FFF1F2',
+  expenseMuted: '#FECDD3',
+};
+
 export const lightColors: ColorPalette = {
-  background: '#E9F0F7',
-  backgroundDeep: '#D4E2EF',
-  surface: '#FFFFFF',
-  surfaceMuted: '#F4F8FC',
-  navy: '#0F1F35',
-  navyMid: '#1A3352',
-  primary: '#1A3352',
-  primarySoft: '#DCE8F5',
-  accent: '#10B981',
-  accentDark: '#059669',
-  accentSoft: '#D1FAE5',
-  accentMuted: '#6EE7B7',
-  text: '#0F1F35',
-  textSecondary: '#3D5268',
-  textMuted: '#6B7F94',
-  textOnDark: '#F0F9FF',
-  textOnDarkMuted: '#94B4CC',
-  textOnAccent: '#FFFFFF',
-  border: '#C5D5E4',
-  borderLight: '#E2EBF4',
-  danger: '#E11D48',
-  dangerSoft: '#FFE4E6',
-  warning: '#F59E0B',
-  warningSoft: '#FEF3C7',
-  success: '#10B981',
-  successSoft: '#D1FAE5',
-  tabBar: '#FFFFFF',
-  tabActive: '#10B981',
-  tabInactive: '#8BA3B8',
-  overlay: 'rgba(15, 31, 53, 0.55)',
-  shadow: '#0F1F35',
+  background: '#FFDAB9',
+  backgroundDeep: '#F7CBA3',
+  surface: '#FFF1E6',
+  surfaceMuted: '#FCE6D3',
+  navy: '#120A8F',
+  navyMid: '#241A9E',
+  ...lightBrand,
+  ...lightIncome,
+  ...lightExpense,
+  text: '#1E1840',
+  textSecondary: '#4A4470',
+  textMuted: '#857F9E',
+  textOnDark: '#FFE9D6',
+  textOnDarkMuted: 'rgba(255, 233, 214, 0.72)',
+  textOnAccent: '#FFF1E6',
+  border: '#F0C6A4',
+  borderLight: '#F8D8BF',
+  danger: '#DC2626',
+  dangerSoft: '#FEE2E2',
+  warning: '#D97706',
+  warningSoft: '#FFF7ED',
+  success: '#059669',
+  successSoft: '#ECFDF5',
+  tabBar: '#FFF1E6',
+  tabAccent: '#120A8F',
+  tabActive: '#120A8F',
+  tabInactive: '#9A93A8',
+  overlay: 'rgba(18, 10, 143, 0.32)',
+  shadow: '#2A1E5A',
+};
+
+/** Тёмная: лавандовый текст и CTA на глубоком фиолетовом. */
+const darkBrand = {
+  primary: '#C8BEFA',
+  primarySoft: '#272150',
+  accent: '#C8BEFA',
+  accentDark: '#DAD2FF',
+  accentSoft: '#272150',
+  accentMuted: '#5B5288',
+};
+
+const darkIncome = {
+  income: '#2DD4BF',
+  incomeDark: '#5EEAD4',
+  incomeSoft: '#042F2E',
+  incomeMuted: '#115E59',
+};
+
+const darkExpense = {
+  expense: '#FB7185',
+  expenseDark: '#FDA4AF',
+  expenseSoft: '#4C0519',
+  expenseMuted: '#881337',
 };
 
 export const darkColors: ColorPalette = {
-  background: '#0B1220',
-  backgroundDeep: '#060D18',
-  surface: '#141E2E',
-  surfaceMuted: '#1A2838',
-  navy: '#0A1628',
-  navyMid: '#1E3A5F',
-  primary: '#2D4A6F',
-  primarySoft: '#1A2D42',
-  accent: '#10B981',
-  accentDark: '#34D399',
-  accentSoft: '#064E3B',
-  accentMuted: '#047857',
-  text: '#F0F9FF',
-  textSecondary: '#B8CDE0',
-  textMuted: '#7A9BB5',
-  textOnDark: '#F0F9FF',
-  textOnDarkMuted: '#94B4CC',
-  textOnAccent: '#FFFFFF',
-  border: '#2A3F5C',
-  borderLight: '#1E2F45',
-  danger: '#FB7185',
-  dangerSoft: '#3F1D28',
+  background: '#151130',
+  backgroundDeep: '#0F0C24',
+  surface: '#1E1942',
+  surfaceMuted: '#272150',
+  navy: '#100C26',
+  navyMid: '#2A2358',
+  ...darkBrand,
+  ...darkIncome,
+  ...darkExpense,
+  text: '#EAE6FF',
+  textSecondary: '#C7C0EC',
+  textMuted: '#8E86B6',
+  textOnDark: '#EAE6FF',
+  textOnDarkMuted: 'rgba(234, 230, 255, 0.68)',
+  textOnAccent: '#151130',
+  border: '#2F2960',
+  borderLight: '#231D4A',
+  danger: '#F87171',
+  dangerSoft: '#4C1233',
   warning: '#FBBF24',
-  warningSoft: '#3D3010',
+  warningSoft: '#3A2A12',
   success: '#34D399',
-  successSoft: '#064E3B',
-  tabBar: '#141E2E',
-  tabActive: '#34D399',
-  tabInactive: '#6B8BA8',
-  overlay: 'rgba(0, 0, 0, 0.7)',
+  successSoft: '#0B3B33',
+  tabBar: '#1E1942',
+  tabAccent: '#C8BEFA',
+  tabActive: '#C8BEFA',
+  tabInactive: '#7E76A8',
+  overlay: 'rgba(8, 6, 20, 0.66)',
   shadow: '#000000',
 };
 
 /** @deprecated Используйте useAppTheme().colors */
 export const colors = lightColors;
 
-export const chartPaletteLight = [
-  '#10B981',
-  '#1A3352',
-  '#38BDF8',
-  '#14B8A6',
-  '#6366F1',
-  '#F59E0B',
-  '#8B5CF6',
-  '#64748B',
+/** Тёплый золотой акцент luxury-аналитики. */
+export const chartGold = '#D9A441';
+export const chartGoldSoft = '#E8C57E';
+
+/**
+ * Luxury wealth-палитра: тёплое золото во главе, приглушённые
+ * металлические и драгоценные тона. Без кислотного неона.
+ */
+const luxuryPalette = [
+  '#D9A441',
+  '#C77B58',
+  '#7E9E8E',
+  '#9B7BA0',
+  '#6F8CA8',
+  '#C2A36B',
+  '#A98B6F',
+  '#8C8F96',
 ];
 
-export const chartPaletteDark = [
-  '#34D399',
-  '#60A5FA',
-  '#2DD4BF',
-  '#A78BFA',
-  '#FBBF24',
-  '#F472B6',
-  '#94A3B8',
-  '#4ADE80',
-];
+export const chartPaletteLight = luxuryPalette;
+export const chartPaletteDark = luxuryPalette;
 
 /** @deprecated Используйте useAppTheme().chartPalette */
-export const chartPalette = chartPaletteLight;
+export const chartPalette = luxuryPalette;

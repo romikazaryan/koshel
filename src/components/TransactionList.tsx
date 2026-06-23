@@ -6,15 +6,18 @@ type Props = {
   transactions: Transaction[];
   kind: TransactionKind;
   showHeading?: boolean;
+  emptyTitle?: string;
+  emptyHint?: string;
   onEdit?: (transaction: Transaction) => void;
   onRemove?: (id: string) => void;
 };
 
-const SOURCE_LABELS: Record<TransactionSource, string> = {
+const SOURCE_LABELS: Record<string, string> = {
   manual: 'Вручную',
   voice: 'Голос',
   receipt: 'Чек',
   bank: 'Банк',
+  broker: 'T-Invest',
 };
 
 function formatDate(dateStr: string) {
@@ -36,7 +39,15 @@ const LIST_META: Record<TransactionKind, { title: string; emptyTitle: string; em
   },
 };
 
-export function TransactionList({ transactions, kind, showHeading = true, onEdit, onRemove }: Props) {
+export function TransactionList({
+  transactions,
+  kind,
+  showHeading = true,
+  emptyTitle,
+  emptyHint,
+  onEdit,
+  onRemove,
+}: Props) {
   const styles = useThemedStyles(({ colors, radii, shadows }) =>
     StyleSheet.create({
       wrap: { marginTop: 8 },
@@ -68,8 +79,8 @@ export function TransactionList({ transactions, kind, showHeading = true, onEdit
         ...shadows.soft,
       },
       stripe: { width: 4 },
-      stripeIncome: { backgroundColor: colors.accent },
-      stripeExpense: { backgroundColor: colors.navyMid },
+      stripeIncome: { backgroundColor: colors.income },
+      stripeExpense: { backgroundColor: colors.expense },
       cardBody: { flex: 1, padding: 14 },
       rowTop: {
         flexDirection: 'row',
@@ -80,7 +91,7 @@ export function TransactionList({ transactions, kind, showHeading = true, onEdit
       },
       itemTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
       amount: { fontSize: 16, fontWeight: '800', color: colors.text },
-      amountIncome: { color: colors.accentDark },
+      amountIncome: { color: colors.incomeDark },
       rowBottom: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -92,21 +103,23 @@ export function TransactionList({ transactions, kind, showHeading = true, onEdit
       source: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
       dot: { color: colors.textMuted, marginHorizontal: 4 },
       actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-      edit: { color: colors.accentDark, fontSize: 13, fontWeight: '700' },
+      edit: { color: colors.incomeDark, fontSize: 13, fontWeight: '700' },
       remove: { color: colors.danger, fontSize: 13, fontWeight: '600' },
     })
   );
 
   const meta = LIST_META[kind];
   const isIncome = kind === 'income';
+  const resolvedEmptyTitle = emptyTitle ?? meta.emptyTitle;
+  const resolvedEmptyHint = emptyHint ?? meta.emptyHint;
 
   return (
     <View style={styles.wrap}>
       {showHeading ? <Text style={styles.title}>{meta.title}</Text> : null}
       {transactions.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>{meta.emptyTitle}</Text>
-          <Text style={styles.emptyHint}>{meta.emptyHint}</Text>
+          <Text style={styles.emptyTitle}>{resolvedEmptyTitle}</Text>
+          {resolvedEmptyHint ? <Text style={styles.emptyHint}>{resolvedEmptyHint}</Text> : null}
         </View>
       ) : (
         transactions.map((item) => (

@@ -5,6 +5,7 @@ const LABELS: Record<TransactionSource, string> = {
   voice: 'Голос',
   receipt: 'Чек',
   bank: 'Банк',
+  broker: 'T-Invest',
 };
 
 export function getTransactionSourceLabel(source?: TransactionSource) {

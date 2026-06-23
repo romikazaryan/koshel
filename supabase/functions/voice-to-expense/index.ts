@@ -3,7 +3,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts'
 import { extractJsonLike, yandexGptCompletionText } from '../_shared/yandex.ts'
 
-const ALLOWED_CATEGORIES = ['Продукты', 'Транспорт', 'Кафе', 'Развлечения', 'ЖКХ', 'Одежда', 'Здоровье', 'Другое']
+const ALLOWED_CATEGORIES = ['Продукты', 'Транспорт', 'Кафе', 'Развлечения', 'ЖКХ', 'Одежда', 'Здоровье', 'Онлайн', 'Другое']
 
 const getModelUri = () => {
   const uri = Deno.env.get('YANDEX_GPT_MODEL_URI')

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { updateTransaction } from '../lib/transactions';
 import type { HomeStackParamList } from '../navigation/types';
@@ -66,18 +67,43 @@ export function EditTransactionScreen({ navigation, route }: Props) {
       },
       saveDisabled: { opacity: 0.6 },
       saveText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
+      metaBox: {
+        borderWidth: 1,
+        borderColor: c.borderLight,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        backgroundColor: c.surfaceMuted,
+      },
+      metaText: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: c.textMuted,
+      },
     })
   );
 
   const transaction = route.params?.transaction;
   const isIncome = transaction?.kind === 'income';
-  const initialNote = (transaction?.note ?? transaction?.title ?? '').trim();
+  const isImported =
+    transaction?.source === 'bank' || transaction?.source === 'broker';
 
+  const [title, setTitle] = useState(transaction?.title ?? '');
+  const [note, setNote] = useState(
+    isImported ? '' : (transaction?.note ?? transaction?.title ?? '').trim()
+  );
   const [amount, setAmount] = useState(transaction ? String(transaction.amount) : '');
-  const [note, setNote] = useState(initialNote);
   const [date, setDate] = useState(transaction?.date ?? '');
   const [category, setCategory] = useState(transaction?.category ?? 'Другое');
   const [isSaving, setIsSaving] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const importNoteRef = useRef(transaction?.note);
+
+  const scrollFocusedFieldIntoView = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
 
   const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -112,7 +138,8 @@ export function EditTransactionScreen({ navigation, route }: Props) {
         kind: transaction.kind,
         amount: value,
         category,
-        note,
+        title,
+        note: isImported ? importNoteRef.current : note,
         date: date.trim(),
       });
       navigation.goBack();
@@ -126,7 +153,7 @@ export function EditTransactionScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardBottomPadding={120}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backText}>← Назад</Text>
         </TouchableOpacity>
@@ -140,6 +167,17 @@ export function EditTransactionScreen({ navigation, route }: Props) {
             keyboardType="numeric"
             value={amount}
             onChangeText={setAmount}
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Название</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder={isIncome ? 'Зарплата за май' : 'Например, Ozon'}
             placeholderTextColor={colors.textMuted}
           />
         </View>
@@ -174,17 +212,27 @@ export function EditTransactionScreen({ navigation, route }: Props) {
           />
         </View>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>{isIncome ? 'Описание' : 'Заметка'}</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={note}
-            onChangeText={setNote}
-            multiline
-            placeholder={isIncome ? 'Зарплата за май' : 'Например, обед'}
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        {isImported && importNoteRef.current ? (
+          <View style={styles.field}>
+            <Text style={styles.label}>Из выписки</Text>
+            <View style={styles.metaBox}>
+              <Text style={styles.metaText}>{importNoteRef.current}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.field}>
+            <Text style={styles.label}>{isIncome ? 'Описание' : 'Заметка'}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={note}
+              onChangeText={setNote}
+              multiline
+              placeholder={isIncome ? 'Зарплата за май' : 'Например, обед'}
+              placeholderTextColor={colors.textMuted}
+              onFocus={scrollFocusedFieldIntoView}
+            />
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.saveButton, isSaving && styles.saveDisabled]}
@@ -193,7 +241,7 @@ export function EditTransactionScreen({ navigation, route }: Props) {
         >
           <Text style={styles.saveText}>{isSaving ? 'Сохраняю...' : 'Сохранить'}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

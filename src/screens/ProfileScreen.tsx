@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme, type ThemePreference } from '../contexts/ThemeContext';
@@ -21,7 +21,7 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
-export function ProfileScreen(_props: Props) {
+export function ProfileScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
   const { colors, preference, setPreference } = useAppTheme();
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
@@ -202,7 +202,7 @@ export function ProfileScreen(_props: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardBottomPadding={48} avoidKeyboard={false}>
         <Text style={styles.title}>Профиль</Text>
         <Text style={styles.subtitle}>Аккаунт и настройки приложения</Text>
 
@@ -258,6 +258,20 @@ export function ProfileScreen(_props: Props) {
           ) : null}
         </View>
 
+        <TouchableOpacity
+          style={styles.menuCard}
+          onPress={() => navigation.navigate('BankConnections')}
+          activeOpacity={0.85}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuTitle}>Банки и подключения</Text>
+            <Text style={styles.menuHint}>
+              T-Invest, Open Finance. Выписки банков — в разделе «Операции» на главной
+            </Text>
+          </View>
+          <Text style={styles.menuArrow}>›</Text>
+        </TouchableOpacity>
+
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Версия</Text>
           <Text style={styles.cardValueMuted}>koshel {appVersion}</Text>
@@ -266,7 +280,7 @@ export function ProfileScreen(_props: Props) {
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutText}>Выйти из аккаунта</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

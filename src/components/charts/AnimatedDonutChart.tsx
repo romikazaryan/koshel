@@ -1,9 +1,19 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { useAppTheme } from '../../contexts/ThemeContext';
+import { chartGold } from '../../theme/colors';
 import { shiftHexColor } from '../../lib/colorUtils';
-import { describeDonutSlice } from '../../lib/chartGeometry';
+import { describeArc, polarToCartesian } from '../../lib/chartGeometry';
 
 export type DonutSlice = {
   label: string;
@@ -13,305 +23,339 @@ export type DonutSlice = {
 
 type Props = {
   slices: DonutSlice[];
-  centerLabel?: string;
   centerValue?: string;
+  centerTitle?: string;
+  centerSubtitle?: string;
+  size?: number;
+  onPress?: () => void;
 };
 
-const SIZE = 260;
-const CX = SIZE / 2;
-const CY = SIZE / 2;
-const OUTER_R = 110;
-const INNER_R = 72;
-const SHADOW_OFFSET = 5;
+type SliceModel = DonutSlice & {
+  index: number;
+  startAngle: number;
+  sweep: number;
+  percent: number;
+  midAngle: number;
+  gradId: string;
+  tint: string;
+  shade: string;
+};
 
-export function AnimatedDonutChart({ slices, centerLabel = 'Расходы', centerValue }: Props) {
+const DEFAULT_SIZE = 210;
+const REVEAL_STAGGER = 0.08;
+const GAP_DEG = 3.4;
+
+function revealSliceProgress(globalT: number, index: number, total: number) {
+  const start = index * REVEAL_STAGGER;
+  const end = start + 0.82;
+  const span = Math.max(0.001, end - start);
+  const raw = (globalT * (total * REVEAL_STAGGER + 0.82) - start) / span;
+  return Math.min(1, Math.max(0, raw));
+}
+
+function formatRub(amount: number) {
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽`;
+}
+
+export function AnimatedDonutChart({
+  slices,
+  centerValue,
+  centerTitle = 'Всего расходов',
+  centerSubtitle = 'за месяц',
+  size = DEFAULT_SIZE,
+  onPress,
+}: Props) {
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
 
-  const total = useMemo(() => slices.reduce((sum, s) => sum + s.amount, 0), [slices]);
-  const chartKey = useMemo(
-    () => slices.map((s) => `${s.label}:${s.amount}`).join('|'),
-    [slices]
-  );
+  const chartSize = Math.min(size, screenWidth - 72);
+  const cx = chartSize / 2;
+  const cy = chartSize / 2;
+  const ringWidth = chartSize * 0.16;
+  const midR = chartSize / 2 - ringWidth / 2 - 4;
+  const hubR = midR - ringWidth / 2 - 8;
+  const pad = 18;
+  const canvas = chartSize + pad * 2;
 
+  const [revealT, setRevealT] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  const total = useMemo(() => slices.reduce((sum, s) => sum + s.amount, 0), [slices]);
+  const chartKey = useMemo(() => slices.map((s) => `${s.label}:${s.amount}`).join('|'), [slices]);
+
+  const reveal = useRef(new Animated.Value(0)).current;
   const enter = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  const ring = useRef(new Animated.Value(0)).current;
 
-  const paths = useMemo(() => {
+  const sliceModels = useMemo<SliceModel[]>(() => {
     if (total <= 0) return [];
     let angle = 0;
     return slices.map((slice, index) => {
       const sweep = (slice.amount / total) * 360;
-      const start = angle;
-      const end = angle + sweep;
-      angle = end;
+      const startAngle = angle;
+      angle += sweep;
       return {
         ...slice,
         index,
-        d: describeDonutSlice(CX, CY, OUTER_R, INNER_R, start, end),
+        startAngle,
+        sweep,
+        midAngle: startAngle + sweep / 2,
         percent: Math.round((slice.amount / total) * 100),
-        gradId: `slice-grad-${index}`,
-        light: shiftHexColor(slice.color, isDark ? 22 : 32),
-        dark: shiftHexColor(slice.color, isDark ? -32 : -24),
+        gradId: `lux-grad-${index}`,
+        tint: shiftHexColor(slice.color, isDark ? 20 : 14),
+        shade: shiftHexColor(slice.color, isDark ? -24 : -14),
       };
     });
   }, [isDark, slices, total]);
 
+  const renderedSlices = useMemo(() => {
+    return sliceModels
+      .map((slice) => {
+        const progress = reduceMotion ? 1 : revealSliceProgress(revealT, slice.index, sliceModels.length);
+        const visibleSweep = slice.sweep * progress;
+        const gap = Math.min(GAP_DEG, Math.max(0, visibleSweep - 1.5));
+        const start = slice.startAngle + gap / 2;
+        const end = slice.startAngle + visibleSweep - gap / 2;
+        if (end - start <= 0.4) return null;
+        return { ...slice, d: describeArc(cx, cy, midR, start, end) };
+      })
+      .filter((s): s is NonNullable<typeof s> => s != null);
+  }, [cx, cy, midR, reduceMotion, revealT, sliceModels]);
+
   useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
+  useEffect(() => {
+    reveal.setValue(0);
     enter.setValue(0);
-    pulse.setValue(0);
+    setRevealT(reduceMotion ? 1 : 0);
 
-    Animated.spring(enter, {
-      toValue: 1,
-      friction: 8,
-      tension: 62,
-      useNativeDriver: true,
-    }).start();
+    if (reduceMotion) {
+      enter.setValue(1);
+      return;
+    }
 
-    const pulseLoop = Animated.loop(
+    const listener = reveal.addListener(({ value }) => setRevealT(value));
+    Animated.parallel([
+      Animated.timing(enter, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(reveal, {
+        toValue: 1,
+        duration: 1300,
+        easing: Easing.bezier(0.22, 1, 0.36, 1),
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    return () => reveal.removeListener(listener);
+  }, [chartKey, enter, reduceMotion, reveal]);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const breathe = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
           toValue: 1,
-          duration: 1700,
+          duration: 1900,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
           toValue: 0,
-          duration: 1700,
+          duration: 1900,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
+    const radar = Animated.loop(
+      Animated.timing(ring, {
+        toValue: 1,
+        duration: 2800,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+    breathe.start();
+    radar.start();
+    return () => {
+      breathe.stop();
+      radar.stop();
+    };
+  }, [pulse, reduceMotion, ring]);
 
-    pulseLoop.start();
-    return () => pulseLoop.stop();
-  }, [chartKey, enter, pulse]);
+  const displayTotal = centerValue ?? formatRub(total);
 
-  const ringScale = Animated.multiply(
-    enter.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.75, 1],
-    }),
-    pulse.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 1.04],
-    })
-  );
+  const trackStroke = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+  const hubBorder = isDark ? 'rgba(217,164,65,0.22)' : 'rgba(0,0,0,0.05)';
+  const ambientOpacity = isDark ? 0.55 : 0.28;
 
-  const displayTotal =
-    centerValue ?? `₽${total.toLocaleString('ru-RU', { maximumFractionDigits: 0 })}`;
-
-  const hubFill = colors.surface;
-  const hubRim = isDark ? '#FFFFFF18' : '#FFFFFFCC';
-  const rimHighlight = isDark ? '#FFFFFF28' : '#FFFFFFA0';
+  const pulseScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.018] });
+  const enterScale = enter.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
+  const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.16] });
+  const ringOpacity = ring.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 0.28, 0] });
+  const ringDiameter = chartSize - 2;
 
   return (
-    <View style={[styles.wrap, { maxWidth: Math.min(screenWidth - 48, 340) }]}>
-      <View style={styles.chartStage}>
-        <Animated.View
-          style={[
-            styles.ringCluster,
-            {
-              opacity: enter,
-              transform: [{ scale: ringScale }],
-            },
-          ]}
+    <View style={[styles.wrap, { width: canvas, height: canvas }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.radarRing,
+          {
+            width: ringDiameter,
+            height: ringDiameter,
+            borderRadius: ringDiameter / 2,
+            left: pad + cx - ringDiameter / 2,
+            top: pad + cy - ringDiameter / 2,
+            borderColor: chartGold,
+            opacity: ringOpacity,
+            transform: [{ scale: ringScale }],
+          },
+        ]}
+      />
+
+      <Animated.View
+        style={{
+          opacity: enter,
+          transform: [{ scale: Animated.multiply(enterScale, pulseScale) }],
+        }}
+      >
+        <Pressable
+          onPress={onPress}
+          accessibilityRole={onPress ? 'button' : undefined}
+          accessibilityLabel={onPress ? 'Открыть разбор расходов' : undefined}
         >
-          <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
-              <Defs>
-                <RadialGradient
-                  id="ambientGlow"
-                  cx={String(CX)}
-                  cy={String(CY)}
-                  r={String(OUTER_R + 32)}
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <Stop offset="0%" stopColor={colors.accent} stopOpacity={0.38} />
-                  <Stop offset="62%" stopColor={colors.accent} stopOpacity={0.1} />
-                  <Stop offset="100%" stopColor={colors.accent} stopOpacity={0} />
-                </RadialGradient>
-                {paths.map((slice) => (
+          <Svg width={canvas} height={canvas} viewBox={`0 0 ${canvas} ${canvas}`}>
+            <Defs>
+              <RadialGradient id="lux-ambient" cx="50%" cy="50%" r="50%">
+                <Stop offset="0%" stopColor={chartGold} stopOpacity={ambientOpacity} />
+                <Stop offset="58%" stopColor={chartGold} stopOpacity={ambientOpacity * 0.3} />
+                <Stop offset="100%" stopColor={chartGold} stopOpacity={0} />
+              </RadialGradient>
+              {sliceModels.map((slice) => {
+                const hi = polarToCartesian(cx, cy, midR, slice.midAngle - 30);
+                const lo = polarToCartesian(cx, cy, midR, slice.midAngle + 130);
+                return (
                   <LinearGradient
                     key={slice.gradId}
                     id={slice.gradId}
-                    x1={String(CX - 42)}
-                    y1={String(CY - OUTER_R)}
-                    x2={String(CX + 38)}
-                    y2={String(CY + OUTER_R)}
+                    x1={String(hi.x)}
+                    y1={String(hi.y)}
+                    x2={String(lo.x)}
+                    y2={String(lo.y)}
                     gradientUnits="userSpaceOnUse"
                   >
-                    <Stop offset="0%" stopColor={slice.light} />
-                    <Stop offset="48%" stopColor={slice.color} />
-                    <Stop offset="100%" stopColor={slice.dark} />
+                    <Stop offset="0%" stopColor={slice.tint} />
+                    <Stop offset="55%" stopColor={slice.color} />
+                    <Stop offset="100%" stopColor={slice.shade} />
                   </LinearGradient>
-                ))}
-              </Defs>
+                );
+              })}
+            </Defs>
 
-              <Circle cx={CX} cy={CY} r={OUTER_R + 26} fill="url(#ambientGlow)" />
+            <G x={pad} y={pad}>
+              <Circle cx={cx} cy={cy} r={midR * 1.34} fill="url(#lux-ambient)" />
 
-              <G transform={`translate(0, ${SHADOW_OFFSET})`} opacity={0.32}>
-                {paths.map((slice) => (
-                  <Path key={`shadow-${slice.index}`} d={slice.d} fill="#000000" />
-                ))}
-              </G>
+              <Circle
+                cx={cx}
+                cy={cy}
+                r={midR}
+                fill="none"
+                stroke={trackStroke}
+                strokeWidth={ringWidth}
+              />
 
-              {paths.map((slice) => (
+              {renderedSlices.map((slice) => (
                 <Path
-                  key={`body-${slice.index}`}
+                  key={`slice-${slice.index}`}
                   d={slice.d}
-                  fill={`url(#${slice.gradId})`}
-                  stroke={slice.dark}
-                  strokeWidth={0.75}
-                  strokeLinejoin="round"
+                  fill="none"
+                  stroke={`url(#${slice.gradId})`}
+                  strokeWidth={ringWidth}
+                  strokeLinecap="round"
                 />
               ))}
+            </G>
+          </Svg>
 
-              <Circle
-                cx={CX}
-                cy={CY}
-                r={OUTER_R - 0.5}
-                fill="none"
-                stroke={rimHighlight}
-                strokeWidth={1.4}
-                opacity={0.5}
-              />
-
-              <Circle cx={CX} cy={CY} r={INNER_R + 2} fill={isDark ? '#00000044' : '#0F1F3528'} />
-              <Circle cx={CX} cy={CY} r={INNER_R} fill={hubFill} />
-              <Circle
-                cx={CX}
-                cy={CY - 2}
-                r={INNER_R - 4}
-                fill="none"
-                stroke={hubRim}
-                strokeWidth={1.2}
-                opacity={0.45}
-              />
-            </Svg>
-        </Animated.View>
-
-        <View style={styles.centerLabel} pointerEvents="none">
-          <Text style={[styles.centerTitle, { color: colors.textMuted }]}>{centerLabel}</Text>
-          <Text style={[styles.centerValue, { color: colors.text }]}>{displayTotal}</Text>
-        </View>
-      </View>
-
-      <View style={styles.legend}>
-        {paths.map((slice, index) => (
-          <LegendRow
-            key={slice.label}
-            delay={160 + index * 50}
-            color={slice.color}
-            label={slice.label}
-            amount={slice.amount}
-            percent={slice.percent}
-            textColor={colors.text}
-            mutedColor={colors.textMuted}
-          />
-        ))}
-      </View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.hub,
+              {
+                left: pad + cx - hubR,
+                top: pad + cy - hubR,
+                width: hubR * 2,
+                height: hubR * 2,
+                borderRadius: hubR,
+                borderColor: hubBorder,
+              },
+            ]}
+          >
+            <Text style={[styles.hubTitle, { color: colors.textMuted }]} numberOfLines={1}>
+              {centerTitle}
+            </Text>
+            <Text
+              style={[styles.hubAmount, { color: colors.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {displayTotal}
+            </Text>
+            <Text style={[styles.hubSubtitle, { color: chartGold }]} numberOfLines={1}>
+              {centerSubtitle}
+            </Text>
+          </View>
+        </Pressable>
+      </Animated.View>
     </View>
-  );
-}
-
-function LegendRow({
-  delay,
-  color,
-  label,
-  amount,
-  percent,
-  textColor,
-  mutedColor,
-}: {
-  delay: number;
-  color: string;
-  label: string;
-  amount: number;
-  percent: number;
-  textColor: string;
-  mutedColor: string;
-}) {
-  const progress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 380,
-      delay,
-      useNativeDriver: true,
-    }).start();
-  }, [delay, label, progress]);
-
-  return (
-    <Animated.View style={[styles.legendRow, { opacity: progress }]}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text style={[styles.legendLabel, { color: textColor }]} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={[styles.legendMeta, { color: mutedColor }]}>
-        {percent}% · ₽{amount.toLocaleString('ru-RU')}
-      </Text>
-    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    width: '100%',
     alignSelf: 'center',
-  },
-  chartStage: {
-    width: SIZE,
-    height: SIZE,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  ringCluster: {
-    width: SIZE,
-    height: SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerLabel: {
-    ...StyleSheet.absoluteFill,
+  radarRing: {
+    position: 'absolute',
+    borderWidth: 1.5,
+  },
+  hub: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
   },
-  centerTitle: {
-    fontSize: 12,
+  hubTitle: {
+    fontSize: 10,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.3,
+    marginBottom: 3,
+    textAlign: 'center',
   },
-  centerValue: {
-    fontSize: 20,
+  hubAmount: {
+    fontSize: 22,
     fontWeight: '800',
+    letterSpacing: -0.6,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
-  legend: {
-    gap: 10,
-    marginTop: 4,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendLabel: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  legendMeta: {
-    fontSize: 13,
-    fontWeight: '500',
+  hubSubtitle: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    marginTop: 3,
+    textAlign: 'center',
   },
 });

@@ -1,4 +1,9 @@
-import { buildCryptoUnit } from '../constants/marketUnits';
+import {
+  buildCryptoUnit,
+  CRYPTO_UNITS,
+  getCoingeckoId,
+  type CryptoUnit,
+} from '../constants/marketUnits';
 
 const SEARCH_TIMEOUT_MS = 12_000;
 const MIN_QUERY_LENGTH = 1;
@@ -112,6 +117,26 @@ type CoingeckoSearch = {
   }[];
 };
 
+const PRESET_COINGECKO_IDS = new Set(
+  CRYPTO_UNITS.map((item) => getCoingeckoId(item.value as CryptoUnit))
+);
+
+function coingeckoSearchRank(
+  query: string,
+  coin: { id: string; symbol: string; market_cap_rank?: number | null }
+) {
+  const q = query.toLowerCase().trim();
+  const symbol = coin.symbol.toLowerCase();
+  const id = coin.id.toLowerCase();
+  const capRank = coin.market_cap_rank ?? 9999;
+
+  if (PRESET_COINGECKO_IDS.has(coin.id)) return -10_000 + capRank;
+  if (symbol === q) return capRank;
+  if (id === q) return 100 + capRank;
+  if (symbol.startsWith(q)) return 200 + capRank;
+  return 1000 + capRank;
+}
+
 export async function searchCoingeckoCoins(query: string): Promise<MarketSearchItem[]> {
   const q = query.trim();
   if (q.length < MIN_QUERY_LENGTH) return [];
@@ -119,11 +144,28 @@ export async function searchCoingeckoCoins(query: string): Promise<MarketSearchI
   const url = `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`;
   const data = await fetchJson<CoingeckoSearch>(url);
   const coins = data.coins ?? [];
+  const qLower = q.toLowerCase();
 
-  return coins.slice(0, 10).map((coin) => ({
-    unit: buildCryptoUnit(coin.id, coin.symbol),
-    symbol: coin.symbol.toUpperCase(),
-    name: coin.name,
-    subtitle: coin.market_cap_rank ? `Топ-${coin.market_cap_rank}` : undefined,
-  }));
+  const hasPresetSymbolMatch = coins.some(
+    (coin) => PRESET_COINGECKO_IDS.has(coin.id) && coin.symbol.toLowerCase() === qLower
+  );
+
+  const filtered = hasPresetSymbolMatch
+    ? coins.filter((coin) => {
+        if (PRESET_COINGECKO_IDS.has(coin.id)) return true;
+        if (coin.symbol.toLowerCase() === qLower) return false;
+        return true;
+      })
+    : coins;
+
+  return filtered
+    .map((coin) => ({ coin, rank: coingeckoSearchRank(q, coin) }))
+    .sort((a, b) => a.rank - b.rank || a.coin.symbol.localeCompare(b.coin.symbol))
+    .slice(0, 10)
+    .map(({ coin }) => ({
+      unit: buildCryptoUnit(coin.id, coin.symbol),
+      symbol: coin.symbol.toUpperCase(),
+      name: coin.name,
+      subtitle: coin.market_cap_rank ? `Топ-${coin.market_cap_rank}` : undefined,
+    }));
 }

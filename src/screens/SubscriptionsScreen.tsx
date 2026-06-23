@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { EXPENSE_CATEGORIES } from '../constants/categories';
 import {
   deleteSubscription,
@@ -213,9 +213,9 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
 
   return (
     <Root {...rootProps}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={[styles.content, embedded && { paddingTop: 0 }]}
-        keyboardShouldPersistTaps="handled"
+        keyboardBottomPadding={100}
       >
         {!embedded ? (
           <>
@@ -312,7 +312,7 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
             </View>
           ))
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </Root>
   );
 }

@@ -9,3 +9,15 @@ verify_jwt = false
 [functions.receipt-ocr]
 verify_jwt = false
 
+[functions.bank-statement-pdf-text]
+verify_jwt = false
+
+[functions.bank-statement-import]
+verify_jwt = false
+
+[functions.bank-statement-imports]
+verify_jwt = false
+
+[functions.bank-sync]
+verify_jwt = false
+

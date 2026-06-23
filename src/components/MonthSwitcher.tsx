@@ -6,49 +6,68 @@ import { useThemedStyles } from '../theme/useThemedStyles';
 type Props = {
   value: MonthRef;
   onChange: (next: MonthRef) => void;
+  tone?: 'default' | 'hero' | 'ambient';
 };
 
-export function MonthSwitcher({ value, onChange }: Props) {
+export function MonthSwitcher({ value, onChange, tone = 'default' }: Props) {
+  const isHero = tone === 'hero';
+  const isAmbient = tone === 'ambient';
   const styles = useThemedStyles(({ colors, radii, shadows }) =>
     StyleSheet.create({
       wrap: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
+        backgroundColor: isHero
+          ? 'rgba(255,255,255,0.1)'
+          : isAmbient
+            ? colors.surfaceMuted
+            : colors.surface,
+        borderRadius: isAmbient ? radii.pill : radii.lg,
         borderWidth: 1,
-        borderColor: colors.borderLight,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        marginBottom: 16,
-        ...shadows.soft,
+        borderColor: isHero
+          ? 'rgba(255,255,255,0.15)'
+          : isAmbient
+            ? colors.borderLight
+            : colors.borderLight,
+        paddingVertical: isHero ? 4 : isAmbient ? 3 : 10,
+        paddingHorizontal: isHero ? 4 : isAmbient ? 4 : 12,
+        marginBottom: isHero || isAmbient ? 0 : 16,
+        ...(isHero || isAmbient ? {} : shadows.soft),
       },
       arrow: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: isHero ? 30 : isAmbient ? 28 : 44,
+        height: isHero ? 30 : isAmbient ? 28 : 44,
+        borderRadius: isHero ? 15 : isAmbient ? 14 : 22,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.accentSoft,
+        backgroundColor: isHero
+          ? 'rgba(255,255,255,0.12)'
+          : isAmbient
+            ? colors.surface
+            : colors.backgroundDeep,
       },
       arrowDisabled: {
-        backgroundColor: colors.primarySoft,
+        backgroundColor: isHero
+          ? 'rgba(255,255,255,0.06)'
+          : isAmbient
+            ? colors.borderLight
+            : colors.borderLight,
       },
       arrowText: {
-        fontSize: 28,
-        lineHeight: 30,
+        fontSize: isHero ? 22 : isAmbient ? 20 : 28,
+        lineHeight: isHero ? 24 : isAmbient ? 22 : 30,
         fontWeight: '600',
-        color: colors.accentDark,
+        color: isHero ? colors.textOnDark : colors.accentDark,
         marginTop: -2,
       },
       arrowTextDisabled: {
-        color: colors.textMuted,
+        color: isHero ? 'rgba(255,255,255,0.35)' : colors.textMuted,
       },
       label: {
-        fontSize: 17,
+        fontSize: isHero ? 13 : isAmbient ? 12 : 17,
         fontWeight: '700',
-        color: colors.text,
+        color: isHero ? colors.textOnDark : colors.text,
       },
     })
   );

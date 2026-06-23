@@ -3,26 +3,31 @@
     "name": "koshel",
     "slug": "koshel",
     "version": "1.0.0",
+    "scheme": "koshel",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.koshel"
+      "bundleIdentifier": "com.anonymous.koshel",
+      "appleTeamId": "2FXLXGLR39"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F9F8F3",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.koshel"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withIosShareSigning.js",
+      "./plugins/withIosPersonalTeamEntitlements.js",
       [
         "expo-speech-recognition",
         {
@@ -33,7 +38,22 @@
       [
         "expo-notifications",
         {
-          "color": "#10B981"
+          "color": "#2C2E31"
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": "SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"com.adobe.pdf\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.comma-separated-values-text\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.plain-text\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.data\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.item\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.content\" OR ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO \"public.file-url\").@count > 0).@count > 0",
+          "iosShareExtensionName": "Koshel",
+          "androidIntentFilters": [
+            "application/pdf",
+            "text/csv",
+            "text/comma-separated-values",
+            "text/plain",
+            "application/vnd.ms-excel",
+            "*/*"
+          ]
         }
       ]
     ]

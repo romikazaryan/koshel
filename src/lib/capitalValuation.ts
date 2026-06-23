@@ -1,13 +1,21 @@
 import {
+  canonicalizeCryptoUnit,
   getRateSourceLabel,
   getUnitSymbol,
   isCryptoMarketUnit,
   isFxUnit,
   normalizeStockTicker,
+  resolveMoexTicker,
   type FxUnit,
 } from '../constants/marketUnits';
 import type { CapitalAsset } from '../types';
-import { fetchCryptoRatesRub, fetchFxRatesRub, fetchMoexStockRatesRub } from './marketRates';
+import {
+  ensureCryptoRatesForUnits,
+  fetchFxRatesRub,
+  fetchMarketRateRub,
+  fetchMoexStockRatesRub,
+  getCryptoRateFromMap,
+} from './marketRates';
 
 export type AssetValuation = {
   valueRub: number;
@@ -19,6 +27,56 @@ export type AssetValuation = {
   fetchedAt?: string;
   error?: string;
 };
+
+export type BuildValuationsOptions = {
+  /** Принудительно обновить рыночные котировки (MOEX + CoinGecko). */
+  forceMoex?: boolean;
+};
+
+function hasSpotRate(valuation?: AssetValuation): boolean {
+  return valuation?.rateRubPerUnit != null && valuation.rateRubPerUnit > 0;
+}
+
+function lookupCryptoRateRub(unit: string, cryptoRates: Record<string, number>): number | undefined {
+  return getCryptoRateFromMap(unit, cryptoRates);
+}
+
+/** Не затираем котировку, если новый ответ API/кэша пришёл без курса. */
+export function mergeFreshMoexValuations(
+  prev: Record<string, AssetValuation>,
+  next: Record<string, AssetValuation>
+): Record<string, AssetValuation> {
+  const merged: Record<string, AssetValuation> = { ...prev };
+
+  for (const [id, valuation] of Object.entries(next)) {
+    const previous = prev[id];
+
+    if (hasSpotRate(valuation)) {
+      if (!hasSpotRate(previous)) {
+        merged[id] = valuation;
+        continue;
+      }
+
+      const nextIsLive =
+        valuation.source === 'coingecko' || valuation.source === 'moex';
+      const prevIsLive =
+        previous?.source === 'coingecko' || previous?.source === 'moex';
+
+      if (nextIsLive || !prevIsLive) {
+        merged[id] = valuation;
+      }
+      continue;
+    }
+
+    if (hasSpotRate(previous)) {
+      continue;
+    }
+
+    merged[id] = valuation;
+  }
+
+  return merged;
+}
 
 export function getAssetRubValue(asset: CapitalAsset, valuation?: AssetValuation): number {
   if (valuation?.valueRub != null && valuation.valueRub > 0) return valuation.valueRub;
@@ -65,21 +123,71 @@ export function formatValuationAge(fetchedAt?: string) {
   return `${days} дн назад`;
 }
 
+function resolveStoredMarketRate(asset: CapitalAsset): number | undefined {
+  if (asset.marketRateRub != null && asset.marketRateRub > 0) {
+    return asset.marketRateRub;
+  }
+  const quantity = asset.quantity;
+  if (quantity == null || quantity <= 0) return undefined;
+
+  const valueRub =
+    asset.marketValueRub != null && asset.marketValueRub > 0
+      ? asset.marketValueRub
+      : asset.amount > 0
+        ? asset.amount
+        : undefined;
+  if (valueRub == null || valueRub <= 0) return undefined;
+
+  return Math.round((valueRub / quantity) * 100) / 100;
+}
+
+function collectCryptoUnits(assets: CapitalAsset[]): string[] {
+  return [
+    ...new Set(
+      assets
+        .filter(
+          (asset) =>
+            asset.unit &&
+            (asset.assetType === 'crypto' || isCryptoMarketUnit(asset.unit))
+        )
+        .flatMap((asset) => {
+          const canonical = canonicalizeCryptoUnit(asset.unit!);
+          return canonical === asset.unit ? [canonical] : [canonical, asset.unit!];
+        })
+        .filter((unit) => isCryptoMarketUnit(unit))
+        .map((unit) => canonicalizeCryptoUnit(unit))
+    ),
+  ];
+}
+
+function isCryptoHoldings(asset: CapitalAsset): boolean {
+  return (
+    asset.assetType === 'crypto' &&
+    asset.quantity != null &&
+    asset.quantity > 0 &&
+    Boolean(asset.unit) &&
+    isCryptoMarketUnit(asset.unit!)
+  );
+}
+
 export async function buildCapitalValuations(
-  assets: CapitalAsset[]
+  assets: CapitalAsset[],
+  options: BuildValuationsOptions = {}
 ): Promise<Record<string, AssetValuation>> {
   const marketAssets = assets.filter(
     (item) => item.valuationMode === 'market' && item.quantity && item.unit
   );
-  const cryptoUnits = [
-    ...new Set(marketAssets.map((a) => a.unit!).filter(isCryptoMarketUnit)),
-  ];
+  const cryptoUnits = collectCryptoUnits(assets);
   const fxUnits = [...new Set(marketAssets.map((a) => a.unit!).filter(isFxUnit))] as FxUnit[];
   const stockTickers = [
     ...new Set(
       marketAssets
         .filter((a) => a.assetType === 'stocks' && a.unit)
-        .map((a) => normalizeStockTicker(a.unit!))
+        .flatMap((a) => {
+          const normalized = normalizeStockTicker(a.unit!);
+          const moex = resolveMoexTicker(a.unit!);
+          return normalized === moex ? [normalized] : [normalized, moex];
+        })
     ),
   ];
 
@@ -89,10 +197,11 @@ export async function buildCapitalValuations(
   let fetchError: string | undefined;
 
   try {
+    const forceSpot = options.forceMoex === true;
     [cryptoRates, fxRates, stockRates] = await Promise.all([
-      fetchCryptoRatesRub(cryptoUnits),
+      ensureCryptoRatesForUnits(cryptoUnits, { force: forceSpot }),
       fetchFxRatesRub(fxUnits),
-      fetchMoexStockRatesRub(stockTickers),
+      fetchMoexStockRatesRub(stockTickers, { force: forceSpot }),
     ]);
   } catch (error) {
     fetchError = error instanceof Error ? error.message : 'Не удалось загрузить курсы';
@@ -102,7 +211,9 @@ export async function buildCapitalValuations(
   const result: Record<string, AssetValuation> = {};
 
   for (const asset of assets) {
-    if (asset.valuationMode !== 'market' || !asset.quantity || !asset.unit) {
+    const hasCryptoHoldings = isCryptoHoldings(asset);
+
+    if (!hasCryptoHoldings && (asset.valuationMode !== 'market' || !asset.quantity || !asset.unit)) {
       result[asset.id] = {
         valueRub: asset.amount,
         source: 'manual',
@@ -111,41 +222,88 @@ export async function buildCapitalValuations(
     }
 
     const unit = asset.unit;
-    const stockTicker = asset.assetType === 'stocks' ? normalizeStockTicker(unit) : '';
-    const rate =
-      (isCryptoMarketUnit(unit)
-        ? cryptoRates[unit]
-        : isFxUnit(unit)
-          ? fxRates[unit]
-          : asset.assetType === 'stocks'
-            ? stockRates[stockTicker]
-            : undefined) ??
-      asset.marketRateRub ??
-      undefined;
-
-    if (rate == null || rate <= 0) {
+    const quantity = asset.quantity;
+    if (!unit || !quantity) {
       result[asset.id] = {
-        valueRub: asset.marketValueRub ?? asset.amount,
-        quantity: asset.quantity,
-        unit,
-        unitSymbol: getUnitSymbol(unit),
-        source: asset.marketValueRub ? 'cached' : 'manual',
-        fetchedAt: asset.marketFetchedAt,
-        error: fetchError ?? 'Курс недоступен',
+        valueRub: asset.amount,
+        source: 'manual',
       };
       continue;
     }
 
-    const valueRub = Math.round(asset.quantity * rate * 100) / 100;
+    const stockTicker =
+      asset.assetType === 'stocks' ? resolveMoexTicker(unit) : '';
+    const isCryptoAsset = asset.assetType === 'crypto' || isCryptoMarketUnit(unit);
+    const isBondAsset = asset.assetType === 'bonds';
+
+    const skipDbFallback = options.forceMoex === true && asset.assetType === 'stocks';
+    const rate =
+      (isCryptoAsset
+        ? lookupCryptoRateRub(unit, cryptoRates)
+        : isBondAsset
+          ? resolveStoredMarketRate(asset)
+          : isFxUnit(unit)
+          ? fxRates[unit]
+          : asset.assetType === 'stocks'
+            ? stockRates[stockTicker] ?? stockRates[normalizeStockTicker(unit)]
+            : undefined) ??
+      (skipDbFallback ? undefined : resolveStoredMarketRate(asset)) ??
+      undefined;
+
+    if (rate == null || rate <= 0) {
+      const fallbackRate = resolveStoredMarketRate(asset);
+      result[asset.id] = {
+        valueRub: asset.marketValueRub ?? asset.amount,
+        rateRubPerUnit: fallbackRate,
+        quantity,
+        unit,
+        unitSymbol: getUnitSymbol(unit),
+        source: fallbackRate ? 'cached' : asset.marketValueRub ? 'cached' : 'manual',
+        fetchedAt: asset.marketFetchedAt,
+        error: fetchError && !fallbackRate ? 'Курс недоступен' : undefined,
+      };
+      continue;
+    }
+
+    const valueRub = Math.round(quantity * rate * 100) / 100;
     result[asset.id] = {
       valueRub,
       rateRubPerUnit: rate,
-      quantity: asset.quantity,
+      quantity,
       unit,
       unitSymbol: getUnitSymbol(unit),
-      source: isCryptoMarketUnit(unit) ? 'coingecko' : isFxUnit(unit) ? 'cbr' : 'moex',
+      source: isCryptoAsset
+        ? 'coingecko'
+        : isBondAsset
+          ? 'cached'
+          : isFxUnit(unit)
+            ? 'cbr'
+            : 'moex',
       fetchedAt: now,
     };
+  }
+
+  for (const asset of assets) {
+    if (!asset.unit || !asset.quantity || asset.quantity <= 0) continue;
+    if (!(asset.assetType === 'crypto' || isCryptoMarketUnit(asset.unit))) continue;
+    if (hasSpotRate(result[asset.id])) continue;
+
+    try {
+      const rate = await fetchMarketRateRub(asset.unit, 'crypto');
+      if (rate == null || rate <= 0) continue;
+      const valueRub = Math.round(asset.quantity * rate * 100) / 100;
+      result[asset.id] = {
+        valueRub,
+        rateRubPerUnit: rate,
+        quantity: asset.quantity,
+        unit: asset.unit,
+        unitSymbol: getUnitSymbol(asset.unit),
+        source: 'coingecko',
+        fetchedAt: now,
+      };
+    } catch (error) {
+      console.warn('buildCapitalValuations crypto backfill failed', asset.unit, error);
+    }
   }
 
   return result;

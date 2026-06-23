@@ -9,27 +9,29 @@ export const radii = {
 };
 
 export function createThemeLayout(colors: ColorPalette) {
+  const isDark = colors.background === '#0B0F17' || colors.shadow === '#000000';
+
   const shadows = {
     card: {
       shadowColor: colors.shadow,
-      shadowOpacity: colors.shadow === '#000000' ? 0.35 : 0.1,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 8,
+      shadowOpacity: isDark ? 0.32 : 0.05,
+      shadowRadius: isDark ? 20 : 16,
+      shadowOffset: { width: 0, height: isDark ? 10 : 6 },
+      elevation: isDark ? 8 : 3,
     },
     soft: {
       shadowColor: colors.shadow,
-      shadowOpacity: colors.shadow === '#000000' ? 0.25 : 0.06,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 4,
+      shadowOpacity: isDark ? 0.22 : 0.04,
+      shadowRadius: isDark ? 12 : 8,
+      shadowOffset: { width: 0, height: isDark ? 4 : 2 },
+      elevation: isDark ? 4 : 2,
     },
     tabBar: {
       shadowColor: colors.shadow,
-      shadowOpacity: colors.shadow === '#000000' ? 0.4 : 0.12,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: -4 },
-      elevation: 12,
+      shadowOpacity: isDark ? 0.38 : 0.06,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: -2 },
+      elevation: isDark ? 10 : 6,
     },
   };
 
@@ -42,7 +44,7 @@ export function createThemeLayout(colors: ColorPalette) {
   };
 
   return { shadows, cardBase };
-}
+};
 
 /** @deprecated Используйте createThemeLayout через useAppTheme() */
 import { lightColors } from './colors';

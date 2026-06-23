@@ -5,6 +5,7 @@ export const CAPITAL_ASSET_TYPES: { value: CapitalAssetType; label: string }[] =
   { value: 'crypto', label: 'Криптовалюта' },
   { value: 'real_estate', label: 'Недвижимость' },
   { value: 'stocks', label: 'Акции / брокер' },
+  { value: 'bonds', label: 'Облигации' },
   { value: 'cash', label: 'Наличные' },
   { value: 'other', label: 'Другое' },
 ];
