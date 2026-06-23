@@ -28,6 +28,8 @@ type Props = {
   centerSubtitle?: string;
   size?: number;
   onPress?: () => void;
+  /** Входная анимация (прорисовка кольца + радар). Выключи для спокойного вида. */
+  animateEntrance?: boolean;
 };
 
 type SliceModel = DonutSlice & {
@@ -64,6 +66,7 @@ export function AnimatedDonutChart({
   centerSubtitle = 'за месяц',
   size = DEFAULT_SIZE,
   onPress,
+  animateEntrance = true,
 }: Props) {
   const { colors, isDark } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -79,6 +82,7 @@ export function AnimatedDonutChart({
 
   const [revealT, setRevealT] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const staticRender = reduceMotion || !animateEntrance;
 
   const total = useMemo(() => slices.reduce((sum, s) => sum + s.amount, 0), [slices]);
   const chartKey = useMemo(() => slices.map((s) => `${s.label}:${s.amount}`).join('|'), [slices]);
@@ -112,7 +116,7 @@ export function AnimatedDonutChart({
   const renderedSlices = useMemo(() => {
     return sliceModels
       .map((slice) => {
-        const progress = reduceMotion ? 1 : revealSliceProgress(revealT, slice.index, sliceModels.length);
+        const progress = staticRender ? 1 : revealSliceProgress(revealT, slice.index, sliceModels.length);
         const visibleSweep = slice.sweep * progress;
         const gap = Math.min(GAP_DEG, Math.max(0, visibleSweep - 1.5));
         const start = slice.startAngle + gap / 2;
@@ -121,7 +125,7 @@ export function AnimatedDonutChart({
         return { ...slice, d: describeArc(cx, cy, midR, start, end) };
       })
       .filter((s): s is NonNullable<typeof s> => s != null);
-  }, [cx, cy, midR, reduceMotion, revealT, sliceModels]);
+  }, [cx, cy, midR, staticRender, revealT, sliceModels]);
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
@@ -130,9 +134,9 @@ export function AnimatedDonutChart({
   useEffect(() => {
     reveal.setValue(0);
     enter.setValue(0);
-    setRevealT(reduceMotion ? 1 : 0);
+    setRevealT(staticRender ? 1 : 0);
 
-    if (reduceMotion) {
+    if (staticRender) {
       enter.setValue(1);
       return;
     }
@@ -154,10 +158,10 @@ export function AnimatedDonutChart({
     ]).start();
 
     return () => reveal.removeListener(listener);
-  }, [chartKey, enter, reduceMotion, reveal]);
+  }, [chartKey, enter, staticRender, reveal]);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (staticRender) return;
     const breathe = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -188,7 +192,7 @@ export function AnimatedDonutChart({
       breathe.stop();
       radar.stop();
     };
-  }, [pulse, reduceMotion, ring]);
+  }, [pulse, staticRender, ring]);
 
   const displayTotal = centerValue ?? formatRub(total);
 

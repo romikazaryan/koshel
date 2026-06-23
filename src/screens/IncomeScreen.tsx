@@ -12,7 +12,7 @@ export function IncomeScreen({ navigation, route }: Props) {
 
   const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       header: {
         flexDirection: 'row',
         alignItems: 'center',

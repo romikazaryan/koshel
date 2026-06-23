@@ -52,7 +52,7 @@ export function StatementImportsScreen({ navigation }: Props) {
 
   const styles = useThemedStyles(({ colors: c, radii, cardBase }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600', marginBottom: 12 },
       title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 6 },

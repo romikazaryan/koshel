@@ -16,7 +16,7 @@ import {
   lightColors,
   type ColorPalette,
 } from '../theme/colors';
-import { createThemeLayout, radii } from '../theme/layout';
+import { createThemeLayout, moneyText, radii, spacing, typography } from '../theme/layout';
 
 const STORAGE_KEY = '@koshel/theme-preference';
 
@@ -28,6 +28,9 @@ export type AppTheme = {
   shadows: ReturnType<typeof createThemeLayout>['shadows'];
   cardBase: ReturnType<typeof createThemeLayout>['cardBase'];
   radii: typeof radii;
+  spacing: typeof spacing;
+  typography: typeof typography;
+  moneyText: typeof moneyText;
   isDark: boolean;
   preference: ThemePreference;
   setPreference: (value: ThemePreference) => void;
@@ -64,6 +67,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       shadows,
       cardBase,
       radii,
+      spacing,
+      typography,
+      moneyText,
       isDark,
       preference,
       setPreference,

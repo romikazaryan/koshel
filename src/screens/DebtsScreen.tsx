@@ -4,13 +4,14 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import {
   deleteDebt,
   fetchDebts,
@@ -43,11 +44,11 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
       backButton: { marginBottom: 8 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 28, fontWeight: '800', color: c.accent, marginBottom: 6 },
+      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
       subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 20, lineHeight: 21 },
       card: {
         backgroundColor: c.surface,
@@ -66,17 +67,6 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
         letterSpacing: 0.4,
         marginBottom: 10,
       },
-      input: {
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: c.text,
-        marginBottom: 10,
-        backgroundColor: c.backgroundDeep,
-      },
       row: { flexDirection: 'row', gap: 10 },
       rowItem: { flex: 1 },
       remindRow: {
@@ -88,14 +78,6 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
       remindText: { flex: 1, paddingRight: 12 },
       remindTitle: { fontSize: 15, fontWeight: '600', color: c.text, marginBottom: 4 },
       remindHint: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      saveButton: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-      },
-      saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      buttonDisabled: { opacity: 0.6 },
       itemRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -105,7 +87,7 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
       itemMain: { flex: 1 },
       itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 4 },
       itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text },
+      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text, fontVariant: ['tabular-nums'] },
       switchRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -287,17 +269,15 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
 
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Добавить долг</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            containerStyle={{ marginBottom: 10 }}
             placeholder="Название (ипотека, кредит…)"
-            placeholderTextColor={colors.textMuted}
             value={name}
             onChangeText={setName}
           />
-          <TextInput
-            style={styles.input}
+          <Input
+            containerStyle={{ marginBottom: 10 }}
             placeholder="Платёж ₽/мес"
-            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
             value={monthlyPayment}
             onChangeText={setMonthlyPayment}
@@ -321,15 +301,11 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
               thumbColor={remindEnabled ? colors.accent : colors.textMuted}
             />
           </View>
-          <TouchableOpacity
-            style={[styles.saveButton, isSaving && styles.buttonDisabled]}
+          <Button
+            label={isSaving ? 'Сохраняю…' : 'Добавить'}
             onPress={() => void handleAdd()}
-            disabled={isSaving}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSaving ? 'Сохраняю…' : 'Добавить'}
-            </Text>
-          </TouchableOpacity>
+            loading={isSaving}
+          />
         </View>
 
         <Text style={styles.cardLabel}>Ваши долги</Text>

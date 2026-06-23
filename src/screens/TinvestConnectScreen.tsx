@@ -14,16 +14,18 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { connectTInvestToken, requestTInvestSync } from '../lib/financialConnections';
 import type { ProfileStackParamList } from '../navigation/types';
+import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'TinvestConnect'>;
 
 export function TinvestConnectScreen({ navigation }: Props) {
+  const { colors } = useAppTheme();
   const [token, setToken] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const styles = useThemedStyles(({ colors: c, radii, cardBase }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600', marginBottom: 12 },
       title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 6 },
@@ -124,7 +126,7 @@ export function TinvestConnectScreen({ navigation }: Props) {
           value={token}
           onChangeText={setToken}
           placeholder="t.xxxxx…"
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry

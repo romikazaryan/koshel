@@ -86,7 +86,7 @@ export function DashboardScreen({ navigation }: Props) {
     StyleSheet.create({
       safeArea: {
         flex: 1,
-        backgroundColor: c.background,
+        backgroundColor: 'transparent',
       },
       container: {
         flex: 1,

@@ -123,7 +123,7 @@ export function formatValuationAge(fetchedAt?: string) {
   return `${days} дн назад`;
 }
 
-function resolveStoredMarketRate(asset: CapitalAsset): number | undefined {
+export function resolveStoredMarketRate(asset: CapitalAsset): number | undefined {
   if (asset.marketRateRub != null && asset.marketRateRub > 0) {
     return asset.marketRateRub;
   }
@@ -168,6 +168,52 @@ function isCryptoHoldings(asset: CapitalAsset): boolean {
     Boolean(asset.unit) &&
     isCryptoMarketUnit(asset.unit!)
   );
+}
+
+/**
+ * Мгновенная оценка из последних сохранённых данных (БД), без сети.
+ * Нужна для первого кадра экрана капитала, пока грузятся живые котировки.
+ */
+export function buildCachedValuations(
+  assets: CapitalAsset[]
+): Record<string, AssetValuation> {
+  const result: Record<string, AssetValuation> = {};
+
+  for (const asset of assets) {
+    if (asset.valuationMode !== 'market' || !asset.quantity || !asset.unit) {
+      result[asset.id] = { valueRub: asset.amount, source: 'manual' };
+      continue;
+    }
+
+    const rate = resolveStoredMarketRate(asset);
+    const valueRub =
+      asset.marketValueRub != null && asset.marketValueRub > 0
+        ? asset.marketValueRub
+        : asset.amount;
+
+    result[asset.id] = {
+      valueRub,
+      rateRubPerUnit: rate,
+      quantity: asset.quantity,
+      unit: asset.unit,
+      unitSymbol: getUnitSymbol(asset.unit),
+      source: 'cached',
+      fetchedAt: asset.marketFetchedAt,
+    };
+  }
+
+  return result;
+}
+
+/** Самое позднее время сохранённой котировки среди активов (для честной подписи «обновлено»). */
+export function latestStoredFetchedAt(assets: CapitalAsset[]): Date | null {
+  let latest = 0;
+  for (const asset of assets) {
+    if (asset.valuationMode !== 'market' || !asset.marketFetchedAt) continue;
+    const ts = new Date(asset.marketFetchedAt).getTime();
+    if (Number.isFinite(ts) && ts > latest) latest = ts;
+  }
+  return latest > 0 ? new Date(latest) : null;
 }
 
 export async function buildCapitalValuations(

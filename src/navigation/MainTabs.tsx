@@ -22,6 +22,7 @@ export function MainTabs() {
         headerShown: false,
         lazy: true,
         sceneStyle: {
+          backgroundColor: 'transparent',
           paddingBottom: sceneBottomPadding,
         },
         tabBarStyle: {

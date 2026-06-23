@@ -8,8 +8,42 @@ export const radii = {
   pill: 999,
 };
 
+/** Единая шкала отступов (4-pt grid). */
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+};
+
+/**
+ * Роли типографики. Применять как ...typography.h1 в StyleSheet.
+ * fontVariant tabular-nums держим отдельно (money helper ниже).
+ */
+export const typography = {
+  display: { fontSize: 32, fontWeight: '800' as const, letterSpacing: -0.8 },
+  h1: { fontSize: 28, fontWeight: '800' as const, letterSpacing: -0.5 },
+  h2: { fontSize: 20, fontWeight: '800' as const, letterSpacing: -0.3 },
+  h3: { fontSize: 17, fontWeight: '700' as const, letterSpacing: -0.2 },
+  bodyLg: { fontSize: 16, fontWeight: '600' as const },
+  body: { fontSize: 15, fontWeight: '500' as const },
+  meta: { fontSize: 13, fontWeight: '500' as const },
+  caption: { fontSize: 11, fontWeight: '600' as const },
+  overline: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase' as const,
+  },
+};
+
+/** Моноширинные цифры для денежных значений. */
+export const moneyText = { fontVariant: ['tabular-nums' as const] };
+
 export function createThemeLayout(colors: ColorPalette) {
-  const isDark = colors.background === '#0B0F17' || colors.shadow === '#000000';
+  const isDark = colors.shadow === '#000000';
 
   const shadows = {
     card: {

@@ -614,7 +614,14 @@ function parseMoexPrice(data: MoexMarketData, ticker: string): number | null {
 export function readMoexPrevCloseRub(ticker: string): number | null {
   const normalized = normalizeStockTicker(ticker);
   const moex = resolveMoexTicker(ticker);
-  return stockPrevCloseRub[moex] ?? stockPrevCloseRub[normalized] ?? null;
+  const fromMemory = stockPrevCloseRub[moex] ?? stockPrevCloseRub[normalized] ?? null;
+  if (fromMemory != null && fromMemory > 0) return fromMemory;
+  // Переживает перезапуск приложения: вчерашнее закрытие из персистентного кэша.
+  return (
+    readCachedHistoricalRate(historicalCacheKey('stock', normalized, 1)) ??
+    readCachedHistoricalRate(historicalCacheKey('stock', moex, 1)) ??
+    null
+  );
 }
 
 async function fetchMoexSpotQuote(
@@ -681,16 +688,21 @@ export async function fetchMoexStockRatesRub(
   await mapWithConcurrency(toFetch, MOEX_SPOT_CONCURRENCY, async (unitTicker) => {
     try {
       const quote = await fetchMoexSpotQuote(unitTicker, options?.force);
-      if (quote.last == null || quote.last <= 0) return;
-
       const fetchedAt = Date.now();
       const moexTicker = resolveMoexTicker(unitTicker);
-      cache.stockRub[unitTicker] = quote.last;
-      stockCachedAt[unitTicker] = fetchedAt;
-      if (moexTicker !== unitTicker) {
-        cache.stockRub[moexTicker] = quote.last;
-        stockCachedAt[moexTicker] = fetchedAt;
+
+      // Спот (LAST) обновляем только при наличии валидной цены.
+      if (quote.last != null && quote.last > 0) {
+        cache.stockRub[unitTicker] = quote.last;
+        stockCachedAt[unitTicker] = fetchedAt;
+        if (moexTicker !== unitTicker) {
+          cache.stockRub[moexTicker] = quote.last;
+          stockCachedAt[moexTicker] = fetchedAt;
+        }
       }
+
+      // Закрытие прошлого дня сохраняем ВСЕГДА, даже при закрытом рынке (нет LAST),
+      // — это база для динамики «за сегодня».
       if (quote.prevClose != null && quote.prevClose > 0) {
         stockPrevCloseRub[unitTicker] = quote.prevClose;
         if (moexTicker !== unitTicker) {
@@ -885,7 +897,11 @@ export function readCryptoIntradayPastRateRub(unit: string): number | null {
     const chart = getCachedCryptoChartPrices(id);
     if (chart) {
       const fromChart = pickPriceAtDaysAgo(chart, 1);
-      if (fromChart != null && fromChart > 0) return fromChart;
+      if (fromChart != null && fromChart > 0) {
+        // Сохраняем базу «за сегодня», чтобы пережить перезапуск приложения.
+        storeHistoricalRate(historicalCacheKey('crypto', canonical, 1), fromChart);
+        return fromChart;
+      }
     }
   }
   return readHistoricalCryptoRatesRub([canonical], 1)[canonical] ?? null;

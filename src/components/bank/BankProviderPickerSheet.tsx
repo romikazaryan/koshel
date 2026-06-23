@@ -1,6 +1,9 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
 import { getStatementImportBanks } from '../../types/financialConnections';
+import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
@@ -14,6 +17,8 @@ const VISIBLE_ROWS = 5;
 
 export function BankProviderPickerSheet({ visible, onClose, onSelect }: Props) {
   const insets = useSafeAreaInsets();
+  const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps, onScroll } =
+    useSwipeDownToClose(visible, onClose, { mode: 'header' });
   const banks = getStatementImportBanks();
   const listMaxHeight = Math.min(banks.length, VISIBLE_ROWS) * ROW_ESTIMATE;
 
@@ -22,7 +27,10 @@ export function BankProviderPickerSheet({ visible, onClose, onSelect }: Props) {
       overlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.45)',
+      },
+      dim: {
+        ...StyleSheet.absoluteFill,
+        backgroundColor: c.overlay,
       },
       sheet: {
         backgroundColor: c.surface,
@@ -81,20 +89,28 @@ export function BankProviderPickerSheet({ visible, onClose, onSelect }: Props) {
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.title}>Выберите банк</Text>
-            <Text style={styles.subtitle}>CSV или PDF из приложения банка</Text>
-          </View>
+    <Modal visible={visible} animationType="none" transparent presentationStyle="overFullScreen" onRequestClose={close}>
+      <GestureHandlerRootView style={{ flex: 1 }} pointerEvents="box-none">
+      <View style={styles.overlay} pointerEvents="box-none">
+        <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <PanGestureHandler {...panGestureProps}>
+            <View>
+              <View style={styles.handle} />
+              <View style={styles.header}>
+                <Text style={styles.title}>Выберите банк</Text>
+                <Text style={styles.subtitle}>CSV или PDF из приложения банка</Text>
+              </View>
+            </View>
+          </PanGestureHandler>
           <ScrollView
             style={styles.list}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={banks.length > VISIBLE_ROWS}
             bounces={banks.length > VISIBLE_ROWS}
             keyboardShouldPersistTaps="handled"
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
             {banks.map((bank) => (
               <TouchableOpacity
@@ -112,11 +128,12 @@ export function BankProviderPickerSheet({ visible, onClose, onSelect }: Props) {
               </TouchableOpacity>
             ))}
           </ScrollView>
-          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+          <TouchableOpacity style={styles.cancelBtn} onPress={close}>
             <Text style={styles.cancelBtnText}>Отмена</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
+        </Animated.View>
+      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

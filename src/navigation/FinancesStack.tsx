@@ -6,7 +6,12 @@ const Stack = createNativeStackNavigator<FinancesStackParamList>();
 
 export function FinancesStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: 'transparent' },
+      }}
+    >
       <Stack.Screen name="Capital" component={CapitalScreen} />
     </Stack.Navigator>
   );

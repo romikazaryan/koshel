@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import { hasSupabase } from './src/lib/supabase';
 import { useAuthDeepLink } from './src/hooks/useAuthDeepLink';
 import { MIN_SPLASH_MS, SplashLoader } from './src/components/animations/SplashLoader';
 import { ShareIntentHandler } from './src/components/ShareIntentHandler';
+import { AppScreenShell } from './src/components/ui/AppScreenShell';
 
 function AppNavigator() {
   useAuthDeepLink();
@@ -29,9 +31,9 @@ function AppNavigator() {
   }
 
   return (
-    <>
+    <AppScreenShell>
       {hasSupabase && !session ? <AuthScreen /> : <MainTabs />}
-    </>
+    </AppScreenShell>
   );
 }
 
@@ -81,12 +83,14 @@ function ThemedApp() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ShareIntentProvider options={{ resetOnBackground: false }}>
-        <ThemeProvider>
-          <ThemedApp />
-        </ThemeProvider>
-      </ShareIntentProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ShareIntentProvider options={{ resetOnBackground: false }}>
+          <ThemeProvider>
+            <ThemedApp />
+          </ThemeProvider>
+        </ShareIntentProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

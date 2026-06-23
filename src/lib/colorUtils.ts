@@ -1,3 +1,14 @@
+/** hex (#RRGGBB) → rgba(r,g,b,alpha). Нестандартный hex возвращает исходник. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 6) return hex;
+  const num = parseInt(normalized, 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /** Сдвиг яркости hex-цвета (percent: отрицательный — темнее). */
 export function shiftHexColor(hex: string, percent: number): string {
   const normalized = hex.replace('#', '');

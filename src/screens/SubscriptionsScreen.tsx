@@ -4,13 +4,14 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { EXPENSE_CATEGORIES } from '../constants/categories';
 import {
   deleteSubscription,
@@ -40,11 +41,11 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
       backButton: { marginBottom: 8 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 28, fontWeight: '800', color: c.accent, marginBottom: 6 },
+      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
       subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 20, lineHeight: 21 },
       card: {
         backgroundColor: c.surface,
@@ -63,17 +64,6 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
         letterSpacing: 0.4,
         marginBottom: 10,
       },
-      input: {
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: c.text,
-        marginBottom: 10,
-        backgroundColor: c.backgroundDeep,
-      },
       categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
       chip: {
         paddingHorizontal: 12,
@@ -86,14 +76,6 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
       chipActive: { backgroundColor: c.accentSoft, borderColor: c.accent },
       chipText: { fontSize: 13, fontWeight: '600', color: c.textMuted },
       chipTextActive: { color: c.accentDark },
-      saveButton: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-      },
-      saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      buttonDisabled: { opacity: 0.6 },
       itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -103,7 +85,7 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
       itemMain: { flex: 1 },
       itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 4 },
       itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text },
+      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text, fontVariant: ['tabular-nums'] },
       itemActions: { alignItems: 'flex-end', gap: 8 },
       deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600' },
       empty: {
@@ -228,17 +210,15 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
 
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Добавить подписку</Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            containerStyle={{ marginBottom: 10 }}
             placeholder="Название (Netflix, Spotify…)"
-            placeholderTextColor={colors.textMuted}
             value={name}
             onChangeText={setName}
           />
-          <TextInput
-            style={styles.input}
+          <Input
+            containerStyle={{ marginBottom: 10 }}
             placeholder="Сумма ₽/мес"
-            placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
             value={amount}
             onChangeText={setAmount}
@@ -261,15 +241,11 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
               </TouchableOpacity>
             ))}
           </View>
-          <TouchableOpacity
-            style={[styles.saveButton, isSaving && styles.buttonDisabled]}
+          <Button
+            label={isSaving ? 'Сохраняю…' : 'Добавить подписку'}
             onPress={() => void handleAdd()}
-            disabled={isSaving}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSaving ? 'Сохраняю…' : 'Добавить подписку'}
-            </Text>
-          </TouchableOpacity>
+            loading={isSaving}
+          />
         </View>
 
         <Text style={styles.cardLabel}>Ваши подписки</Text>

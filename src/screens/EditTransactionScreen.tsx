@@ -4,17 +4,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { updateTransaction } from '../lib/transactions';
 import type { HomeStackParamList } from '../navigation/types';
-import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'EditTransaction'>;
@@ -24,26 +24,15 @@ function isValidDate(dateStr: string) {
 }
 
 export function EditTransactionScreen({ navigation, route }: Props) {
-  const { colors } = useAppTheme();
-  const styles = useThemedStyles(({ colors: c, radii }) =>
+  const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
       backButton: { marginBottom: 12 },
       backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
       title: { fontSize: 26, fontWeight: '800', color: c.text, marginBottom: 20 },
       field: { marginBottom: 18 },
       label: { fontSize: 14, fontWeight: '600', color: c.textMuted, marginBottom: 8 },
-      input: {
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: c.text,
-        backgroundColor: c.surface,
-      },
       textArea: { minHeight: 88, textAlignVertical: 'top' },
       pillRow: { flexDirection: 'row', flexWrap: 'wrap' },
       pillSpacing: { marginRight: 8, marginBottom: 8 },
@@ -58,15 +47,6 @@ export function EditTransactionScreen({ navigation, route }: Props) {
       pillActive: { backgroundColor: c.accent, borderColor: c.accent },
       pillText: { color: c.textMuted, fontSize: 14, fontWeight: '600' },
       pillTextActive: { color: c.textOnAccent },
-      saveButton: {
-        marginTop: 8,
-        backgroundColor: c.accent,
-        borderRadius: radii.lg,
-        paddingVertical: 16,
-        alignItems: 'center',
-      },
-      saveDisabled: { opacity: 0.6 },
-      saveText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
       metaBox: {
         borderWidth: 1,
         borderColor: c.borderLight,
@@ -162,23 +142,15 @@ export function EditTransactionScreen({ navigation, route }: Props) {
 
         <View style={styles.field}>
           <Text style={styles.label}>Сумма</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-            placeholderTextColor={colors.textMuted}
-          />
+          <Input keyboardType="numeric" value={amount} onChangeText={setAmount} />
         </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>Название</Text>
-          <TextInput
-            style={styles.input}
+          <Input
             value={title}
             onChangeText={setTitle}
             placeholder={isIncome ? 'Зарплата за май' : 'Например, Ozon'}
-            placeholderTextColor={colors.textMuted}
           />
         </View>
 
@@ -202,10 +174,8 @@ export function EditTransactionScreen({ navigation, route }: Props) {
 
         <View style={styles.field}>
           <Text style={styles.label}>Дата</Text>
-          <TextInput
-            style={styles.input}
+          <Input
             placeholder="2026-06-02"
-            placeholderTextColor={colors.textMuted}
             value={date}
             onChangeText={setDate}
             autoCapitalize="none"
@@ -222,25 +192,23 @@ export function EditTransactionScreen({ navigation, route }: Props) {
         ) : (
           <View style={styles.field}>
             <Text style={styles.label}>{isIncome ? 'Описание' : 'Заметка'}</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
+            <Input
+              style={styles.textArea}
               value={note}
               onChangeText={setNote}
               multiline
               placeholder={isIncome ? 'Зарплата за май' : 'Например, обед'}
-              placeholderTextColor={colors.textMuted}
               onFocus={scrollFocusedFieldIntoView}
             />
           </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.saveButton, isSaving && styles.saveDisabled]}
+        <Button
+          label={isSaving ? 'Сохраняю...' : 'Сохранить'}
           onPress={() => void handleSave()}
-          disabled={isSaving}
-        >
-          <Text style={styles.saveText}>{isSaving ? 'Сохраняю...' : 'Сохранить'}</Text>
-        </TouchableOpacity>
+          loading={isSaving}
+          style={{ marginTop: 8 }}
+        />
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

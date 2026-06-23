@@ -14,7 +14,12 @@ const Stack = createNativeStackNavigator<HomeStackParamList>();
 export function HomeStack() {
   return (
     <BankStatementImportProvider>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      >
         <Stack.Screen name="Dashboard" component={DashboardScreen} />
         <Stack.Screen name="OperationsHub" component={OperationsHubScreen} />
         <Stack.Screen name="IncomeMain" component={IncomeScreen} />

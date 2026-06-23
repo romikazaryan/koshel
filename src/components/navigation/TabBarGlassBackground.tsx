@@ -1,16 +1,19 @@
 import { BlurView } from 'expo-blur';
 import { Platform, StyleSheet, View } from 'react-native';
+import { hexToRgba } from '../../lib/colorUtils';
 
 type Props = {
   isDark: boolean;
+  surface: string;
+  accent: string;
 };
 
-/** iOS: нативный blur. Android / без модуля: полупрозрачная подложка. */
-export function TabBarGlassBackground({ isDark }: Props) {
-  const fallback = isDark ? 'rgba(22, 28, 42, 0.96)' : 'rgba(255, 255, 255, 0.9)';
-  const tintOverlay = isDark ? 'rgba(22, 28, 42, 0.28)' : 'rgba(255, 255, 255, 0.22)';
-  const sheen = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.45)';
-  const highlight = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.75)';
+/** iOS: нативный blur + брендовый tint. Android / без модуля: полупрозрачная подложка. */
+export function TabBarGlassBackground({ isDark, surface, accent }: Props) {
+  const fallback = hexToRgba(surface, isDark ? 0.96 : 0.92);
+  const tintOverlay = hexToRgba(surface, isDark ? 0.32 : 0.55);
+  const sheen = hexToRgba(isDark ? accent : surface, isDark ? 0.06 : 0.5);
+  const highlight = hexToRgba(isDark ? accent : '#FFFFFF', isDark ? 0.18 : 0.8);
 
   return (
     <>

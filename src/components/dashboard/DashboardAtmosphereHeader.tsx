@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { MonthSwitcher } from '../MonthSwitcher';
 import { formatMonthLabel, type MonthRef } from '../../lib/month';
-import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
@@ -18,7 +17,6 @@ function getGreeting() {
 }
 
 export function DashboardAtmosphereHeader({ month, onMonthChange }: Props) {
-  const { isDark } = useAppTheme();
   const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
       root: {
@@ -27,37 +25,6 @@ export function DashboardAtmosphereHeader({ month, onMonthChange }: Props) {
         paddingHorizontal: 20,
         paddingTop: 4,
         paddingBottom: 18,
-        overflow: 'hidden',
-      },
-      orbIncome: {
-        position: 'absolute',
-        width: 220,
-        height: 220,
-        borderRadius: 110,
-        top: -90,
-        right: -70,
-        backgroundColor: c.income,
-        opacity: isDark ? 0.14 : 0.1,
-      },
-      orbExpense: {
-        position: 'absolute',
-        width: 180,
-        height: 180,
-        borderRadius: 90,
-        top: -40,
-        left: -60,
-        backgroundColor: c.expense,
-        opacity: isDark ? 0.1 : 0.07,
-      },
-      orbAccent: {
-        position: 'absolute',
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        bottom: -20,
-        right: 48,
-        backgroundColor: c.accent,
-        opacity: isDark ? 0.08 : 0.05,
       },
       topRow: {
         flexDirection: 'row',
@@ -95,10 +62,6 @@ export function DashboardAtmosphereHeader({ month, onMonthChange }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={styles.orbIncome} pointerEvents="none" />
-      <View style={styles.orbExpense} pointerEvents="none" />
-      <View style={styles.orbAccent} pointerEvents="none" />
-
       <View style={styles.topRow}>
         <Text style={styles.brand}>koshel</Text>
         <View style={styles.monthWrap}>

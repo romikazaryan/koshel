@@ -1,18 +1,13 @@
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme, type ThemePreference } from '../contexts/ThemeContext';
 import { fetchMonthlyBudget, saveMonthlyBudget } from '../lib/userSettings';
@@ -23,16 +18,16 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>;
 
 export function ProfileScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
-  const { colors, preference, setPreference } = useAppTheme();
+  const { preference, setPreference } = useAppTheme();
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
   const [budgetInput, setBudgetInput] = useState('');
   const [isSavingBudget, setIsSavingBudget] = useState(false);
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       content: { padding: 20, paddingBottom: 40 },
-      title: { fontSize: 28, fontWeight: '800', color: c.accent, marginBottom: 6 },
+      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
       subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 24 },
       card: {
         backgroundColor: c.surface,
@@ -233,28 +228,28 @@ export function ProfileScreen({ navigation }: Props) {
           <Text style={styles.cardHint}>
             Сколько вы планируете потратить за месяц. На главной покажем прогресс по расходам.
           </Text>
-          <TextInput
-            style={styles.input}
+          <Input
+            containerStyle={{ marginBottom: 12 }}
             keyboardType="numeric"
             placeholder="Например, 50000"
-            placeholderTextColor={colors.textMuted}
             value={budgetInput}
             onChangeText={setBudgetInput}
             editable={!isSavingBudget}
           />
-          <TouchableOpacity
-            style={[styles.saveButton, isSavingBudget && styles.buttonDisabled]}
+          <Button
+            label="Сохранить лимит"
             onPress={() => void handleSaveBudget()}
-            disabled={isSavingBudget}
-          >
-            <Text style={styles.saveButtonText}>
-              {isSavingBudget ? 'Сохраняю...' : 'Сохранить лимит'}
-            </Text>
-          </TouchableOpacity>
+            loading={isSavingBudget}
+          />
           {budgetInput.trim() ? (
-            <TouchableOpacity onPress={handleClearBudget} disabled={isSavingBudget}>
-              <Text style={styles.clearLink}>Убрать лимит</Text>
-            </TouchableOpacity>
+            <Button
+              label="Убрать лимит"
+              variant="ghost"
+              size="md"
+              onPress={handleClearBudget}
+              disabled={isSavingBudget}
+              style={{ marginTop: 4 }}
+            />
           ) : null}
         </View>
 
@@ -277,9 +272,12 @@ export function ProfileScreen({ navigation }: Props) {
           <Text style={styles.cardValueMuted}>koshel {appVersion}</Text>
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Выйти из аккаунта</Text>
-        </TouchableOpacity>
+        <Button
+          label="Выйти из аккаунта"
+          variant="danger"
+          onPress={handleSignOut}
+          style={{ marginTop: 16 }}
+        />
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

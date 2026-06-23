@@ -50,7 +50,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
   const { colors } = useAppTheme();
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       receiptOverlay: {
         flex: 1,
         backgroundColor: c.overlay,

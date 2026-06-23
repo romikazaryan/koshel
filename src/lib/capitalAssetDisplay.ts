@@ -2,6 +2,7 @@ import {
   getHistoryPeriodDays,
   type CapitalHistoryPeriod,
 } from '../constants/capitalFilters';
+import { getCapitalAssetTypeLabel } from '../constants/capitalTypes';
 import {
   getFxUnitLabel,
   getUnitSymbol,
@@ -251,4 +252,53 @@ export function aggregateAssetsSectionMetrics(
     dynamicsExpected,
     dynamicsResolved,
   };
+}
+
+/** Luxury-палитра под классы активов: тёплое золото, медь, изумруд, сталь. */
+const ALLOCATION_COLORS: Partial<Record<CapitalAsset['assetType'], string>> = {
+  stocks: '#D9A441',
+  crypto: '#C77B58',
+  bonds: '#7E9E8E',
+  cash: '#6F8CA8',
+  deposit: '#9B7BA0',
+  real_estate: '#C2A36B',
+  other: '#A98B6F',
+};
+const ALLOCATION_FALLBACK = '#8C8F96';
+
+export type CapitalAllocationSegment = {
+  key: string;
+  label: string;
+  valueRub: number;
+  share: number;
+  color: string;
+};
+
+/** Доли портфеля по классам активов — для премиальной полоски аллокации. */
+export function buildCapitalAllocation(
+  items: CapitalAsset[],
+  valuations: Record<string, AssetValuation | undefined>
+): CapitalAllocationSegment[] {
+  const totals = new Map<CapitalAsset['assetType'], number>();
+  let total = 0;
+
+  for (const item of items) {
+    if (!item.isActive) continue;
+    const value = valuations[item.id]?.valueRub ?? item.amount;
+    if (!value || value <= 0) continue;
+    totals.set(item.assetType, (totals.get(item.assetType) ?? 0) + value);
+    total += value;
+  }
+
+  if (total <= 0) return [];
+
+  return [...totals.entries()]
+    .map(([type, valueRub]) => ({
+      key: type,
+      label: getCapitalAssetTypeLabel(type),
+      valueRub,
+      share: valueRub / total,
+      color: ALLOCATION_COLORS[type] ?? ALLOCATION_FALLBACK,
+    }))
+    .sort((a, b) => b.valueRub - a.valueRub);
 }

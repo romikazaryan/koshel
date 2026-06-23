@@ -1,15 +1,18 @@
 import { useMemo } from 'react';
 import {
+  Animated,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedDonutChart } from '../charts/AnimatedDonutChart';
+import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
+import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import type { Category } from '../../types';
 
@@ -28,14 +31,20 @@ type Props = {
 
 export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: Props) {
   const insets = useSafeAreaInsets();
+  const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps } =
+    useSwipeDownToClose(visible, onClose, { mode: 'header' });
+
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
+      root: {
+        flex: 1,
+      },
       backdrop: {
         flex: 1,
-        backgroundColor: c.overlay,
         justifyContent: 'flex-end',
       },
       sheet: {
+        zIndex: 1,
         maxHeight: '88%',
         backgroundColor: c.surface,
         borderTopLeftRadius: radii.xl,
@@ -46,10 +55,29 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
       scrollContent: {
         paddingBottom: Math.max(insets.bottom, 16),
       },
+      dragHeader: {
+        backgroundColor: c.surface,
+      },
+      handleWrap: {
+        alignItems: 'center',
+        paddingTop: 8,
+        paddingBottom: 6,
+      },
+      bodyTitleWrap: {
+        paddingHorizontal: 20,
+        paddingTop: 18,
+        paddingBottom: 4,
+      },
+      dragHandle: {
+        width: 44,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255,255,255,0.5)',
+      },
       hero: {
         backgroundColor: c.navy,
         paddingHorizontal: 20,
-        paddingTop: 12,
+        paddingTop: 8,
         paddingBottom: 20,
       },
       heroTop: {
@@ -66,6 +94,10 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
         letterSpacing: 0.8,
       },
       closeBtn: {
+        position: 'absolute',
+        top: 16,
+        right: 20,
+        zIndex: 2,
         width: 32,
         height: 32,
         borderRadius: 16,
@@ -102,7 +134,7 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
       },
       body: {
         paddingHorizontal: 20,
-        paddingTop: 18,
+        paddingTop: 6,
         paddingBottom: 8,
       },
       bodyTitle: {
@@ -214,81 +246,100 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
   const maxAmount = sorted[0]?.amount ?? 1;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Закрыть" />
-        <View style={styles.sheet}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator
-            bounces
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.hero}>
-              <View style={styles.heroTop}>
-                <Text style={styles.heroEyebrow}>{monthLabel}</Text>
-                <TouchableOpacity
-                  style={styles.closeBtn}
-                  onPress={onClose}
-                  accessibilityRole="button"
-                  accessibilityLabel="Закрыть"
-                >
-                  <Text style={styles.closeText}>×</Text>
-                </TouchableOpacity>
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent
+      presentationStyle="overFullScreen"
+      onRequestClose={close}
+    >
+      <GestureHandlerRootView style={styles.root} pointerEvents="box-none">
+        <View style={styles.backdrop} pointerEvents="box-none">
+          <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
+          <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+            <PanGestureHandler {...panGestureProps}>
+              <View style={styles.dragHeader}>
+                <View style={styles.hero}>
+                  <View style={styles.handleWrap}>
+                    <View style={styles.dragHandle} />
+                  </View>
+                  <View style={styles.heroTop}>
+                    <Text style={styles.heroEyebrow}>{monthLabel}</Text>
+                    <TouchableOpacity
+                      style={styles.closeBtn}
+                      onPress={close}
+                      accessibilityRole="button"
+                      accessibilityLabel="Закрыть"
+                    >
+                      <Text style={styles.closeText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.heroTitle}>Куда ушли деньги</Text>
+                  <Text style={styles.heroSubtitle}>Разбивка расходов за месяц</Text>
+                  <Text style={styles.heroTotal}>₽{total.toLocaleString('ru-RU')}</Text>
+                  {slices.length > 0 ? (
+                    <View style={styles.chartWrap} pointerEvents="none">
+                      <AnimatedDonutChart slices={slices} size={200} animateEntrance={false} />
+                    </View>
+                  ) : null}
+                </View>
+                {sorted.length > 0 ? (
+                  <View style={styles.bodyTitleWrap}>
+                    <Text style={styles.bodyTitle}>По категориям</Text>
+                  </View>
+                ) : null}
               </View>
-              <Text style={styles.heroTitle}>Куда ушли деньги</Text>
-              <Text style={styles.heroSubtitle}>Разбивка расходов за месяц</Text>
-              <Text style={styles.heroTotal}>₽{total.toLocaleString('ru-RU')}</Text>
-              {slices.length > 0 ? (
-                <View style={styles.chartWrap}>
-                  <AnimatedDonutChart slices={slices} size={200} />
-                </View>
-              ) : null}
-            </View>
+            </PanGestureHandler>
 
-            <View style={styles.body}>
-              {sorted.length === 0 ? (
-                <View style={styles.empty}>
-                  <Text style={styles.emptyText}>За этот месяц расходов пока нет</Text>
-                </View>
-              ) : (
-                <>
-                  <Text style={styles.bodyTitle}>По категориям</Text>
-                  {sorted.map((item, index) => {
-                    const percent = total > 0 ? Math.round((item.amount / total) * 100) : 0;
-                    const widthPercent = Math.max(8, Math.round((item.amount / maxAmount) * 100));
-                    return (
-                      <View key={item.category} style={styles.row}>
-                        <View style={styles.rowTop}>
-                          <View style={styles.rowLabelWrap}>
-                            <View style={[styles.dot, { backgroundColor: item.color }]} />
-                            <Text style={styles.rowLabel} numberOfLines={1}>
-                              {item.category}
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator
+              bounces
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.body}>
+                {sorted.length === 0 ? (
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyText}>За этот месяц расходов пока нет</Text>
+                  </View>
+                ) : (
+                  <>
+                    {sorted.map((item, index) => {
+                      const percent = total > 0 ? Math.round((item.amount / total) * 100) : 0;
+                      const widthPercent = Math.max(8, Math.round((item.amount / maxAmount) * 100));
+                      return (
+                        <View key={item.category} style={styles.row}>
+                          <View style={styles.rowTop}>
+                            <View style={styles.rowLabelWrap}>
+                              <View style={[styles.dot, { backgroundColor: item.color }]} />
+                              <Text style={styles.rowLabel} numberOfLines={1}>
+                                {item.category}
+                              </Text>
+                              {index === 0 ? <Text style={styles.rowBadge}>лидер</Text> : null}
+                            </View>
+                            <Text style={styles.rowAmount}>
+                              ₽{item.amount.toLocaleString('ru-RU')}
                             </Text>
-                            {index === 0 ? <Text style={styles.rowBadge}>лидер</Text> : null}
                           </View>
-                          <Text style={styles.rowAmount}>
-                            ₽{item.amount.toLocaleString('ru-RU')}
-                          </Text>
+                          <View style={styles.rowBarTrack}>
+                            <View
+                              style={[
+                                styles.rowBarFill,
+                                { width: `${widthPercent}%`, backgroundColor: item.color },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.rowPercent}>{percent}% от всех трат</Text>
                         </View>
-                        <View style={styles.rowBarTrack}>
-                          <View
-                            style={[
-                              styles.rowBarFill,
-                              { width: `${widthPercent}%`, backgroundColor: item.color },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.rowPercent}>{percent}% от всех трат</Text>
-                      </View>
-                    );
-                  })}
-                </>
-              )}
-            </View>
-          </ScrollView>
+                      );
+                    })}
+                  </>
+                )}
+              </View>
+            </ScrollView>
+          </Animated.View>
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

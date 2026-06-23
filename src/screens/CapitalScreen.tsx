@@ -7,12 +7,12 @@ import {
   PanResponder,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -23,11 +23,12 @@ import { CapitalCategoryCarousel } from '../components/capital/CapitalCategoryCa
 import { CapitalHistoryPeriodToggle } from '../components/capital/CapitalHistoryPeriodToggle';
 import { CapitalMarketAssetRow } from '../components/capital/CapitalMarketAssetRow';
 import { CapitalSectionSummary } from '../components/capital/CapitalSectionSummary';
+import { CapitalHeroCard } from '../components/capital/CapitalHeroCard';
+import { CapitalManualAssetRow } from '../components/capital/CapitalManualAssetRow';
 import {
   AddCapitalAssetSheet,
   type AddCapitalAssetPayload,
 } from '../components/capital/AddCapitalAssetSheet';
-import { getCapitalAssetTypeLabel } from '../constants/capitalTypes';
 import {
   buildAssetFilterOptions,
   getHistoryPeriodDays,
@@ -57,12 +58,15 @@ import {
 } from '../lib/capital';
 import { requestTInvestSync } from '../lib/financialConnections';
 import {
+  buildCachedValuations,
   buildCapitalValuations,
   collectMarketSnapshots,
   formatQuantityLabel,
+  latestStoredFetchedAt,
   mergeFreshMoexValuations,
   type AssetValuation,
 } from '../lib/capitalValuation';
+import { ensureHistoricalCacheHydrated } from '../lib/marketHistoricalCache';
 import {
   rebuildRateHistoryInsightsFromCache,
   recordValuationSnapshotsIfDue,
@@ -80,10 +84,12 @@ import { fetchMarketRateRub, prefetchCryptoHistoryCharts, prefetchMarketHistoryF
 import {
   getMarketAssetDisplay,
   aggregateAssetsSectionMetrics,
+  buildCapitalAllocation,
   resolveAssetDynamicsInsight,
 } from '../lib/capitalAssetDisplay';
 import type { CapitalAsset } from '../types';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { CapitalCurrencyProvider } from '../contexts/CapitalCurrencyContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 function isCompactMarketAsset(item: CapitalAsset) {
@@ -118,7 +124,7 @@ function filterPageShowsHistoryPeriod(items: CapitalAsset[], filter: CapitalAsse
 const SPOT_REFRESH_INTERVAL_MS = 120_000;
 const ALL_HISTORY_PERIODS: CapitalHistoryPeriod[] = ['d1', 'd365'];
 /** Фиксированный слот — высота не меняется при свайпе, только opacity. */
-const PERIOD_ROW_SLOT_HEIGHT = 28;
+const PERIOD_ROW_SLOT_HEIGHT = 24;
 
 function marketAssetExpectsIntradayDynamics(item: CapitalAsset) {
   return (
@@ -164,155 +170,72 @@ export function CapitalScreen() {
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       screenBody: {
         flex: 1,
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
       },
       headerBlock: {
         flexGrow: 0,
-        paddingTop: 20,
-        paddingBottom: 4,
+        paddingTop: 8,
+        paddingBottom: 2,
       },
-      backButton: { marginBottom: 8 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
       headerRow: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
-        marginBottom: 20,
+        marginBottom: 10,
       },
-      headerText: { flex: 1 },
-      title: { fontSize: 28, fontWeight: '800', color: c.accent, marginBottom: 6 },
-      subtitle: { fontSize: 14, color: c.textMuted, lineHeight: 20 },
+      screenTitle: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: c.text,
+        letterSpacing: -0.5,
+      },
       headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginTop: 4,
+        gap: 6,
       },
-      refreshIconButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+      iconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: c.backgroundDeep,
-      },
-      refreshIconButtonDisabled: { opacity: 0.5 },
-      refreshIcon: {
-        fontSize: 22,
-        fontWeight: '500',
-        color: c.accentDark,
-        lineHeight: 24,
-      },
-      addButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: c.accent,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...shadows.soft,
-      },
-      addButtonText: { color: c.textOnAccent, fontSize: 28, fontWeight: '300', lineHeight: 30 },
-      card: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: c.surfaceMuted,
         borderWidth: 1,
         borderColor: c.borderLight,
+      },
+      iconButtonDisabled: { opacity: 0.5 },
+      addButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: c.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
         ...shadows.soft,
       },
-      cardLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        marginBottom: 10,
-      },
-      input: {
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: c.text,
-        marginBottom: 10,
-        backgroundColor: c.backgroundDeep,
-      },
-      types: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-      chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: c.border,
-        backgroundColor: c.backgroundDeep,
-      },
-      chipActive: { backgroundColor: c.accentSoft, borderColor: c.accent },
-      chipText: { fontSize: 13, fontWeight: '600', color: c.textMuted },
-      chipTextActive: { color: c.accentDark },
-      saveButton: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-      },
-      saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      itemRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: 12,
-      },
-      itemMain: { flex: 1 },
-      itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 2 },
-      itemSource: {
-        fontSize: 11,
-        fontWeight: '500',
-        color: c.textMuted,
-        marginBottom: 4,
-        letterSpacing: 0.2,
-      },
-      itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text },
-      itemActions: { alignItems: 'flex-end', gap: 8 },
-      editLink: { color: c.accentDark, fontSize: 13, fontWeight: '600' },
-      deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600' },
       empty: {
-        padding: 20,
+        paddingVertical: 28,
+        paddingHorizontal: 16,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: c.border,
+        borderColor: c.borderLight,
         borderStyle: 'dashed',
         borderRadius: radii.lg,
+        backgroundColor: c.surfaceMuted,
       },
-      emptyText: { color: c.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-      totalHero: {
-        backgroundColor: c.primarySoft,
-        borderRadius: radii.lg,
-        padding: 18,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: c.border,
-      },
-      totalHeroLabel: {
-        fontSize: 12,
+      emptyTitle: {
+        fontSize: 15,
         fontWeight: '700',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
+        color: c.text,
         marginBottom: 6,
+        textAlign: 'center',
       },
-      totalHeroValue: { fontSize: 30, fontWeight: '900', color: c.accent },
-      totalHeroHint: { marginTop: 6, fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      formHint: { fontSize: 13, color: c.textMuted, lineHeight: 18, marginBottom: 10 },
-      marketSection: { marginBottom: 16 },
+      emptyText: { color: c.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+      marketSection: { marginBottom: 10 },
       marketSectionCard: {
         backgroundColor: c.surface,
         borderRadius: radii.lg,
@@ -324,8 +247,8 @@ export function CapitalScreen() {
       categoryChromeWrap: {
         alignSelf: 'stretch',
         alignItems: 'center',
-        marginTop: 4,
-        marginBottom: 12,
+        marginTop: 2,
+        marginBottom: 8,
       },
       periodRowSlot: {
         alignSelf: 'stretch',
@@ -344,15 +267,15 @@ export function CapitalScreen() {
       },
       assetPagerWrap: {
         flex: 1,
-        marginHorizontal: -20,
+        marginHorizontal: -16,
       },
       assetPageScroll: {
         flex: 1,
         width: '100%',
       },
       assetPageContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 40,
+        paddingHorizontal: 16,
+        paddingBottom: 32,
       },
     })
   );
@@ -581,15 +504,31 @@ export function CapitalScreen() {
   );
 
   const load = useCallback(async () => {
+    // 1) Локальный персистентный кэш истории — основа для мгновенной динамики.
+    await ensureHistoricalCacheHydrated();
+
+    // 2) Активы из БД содержат последние сохранённые котировки.
     const rows = await fetchCapitalAssets();
     setItems(rows);
 
+    // 3) Мгновенный кадр: суммы и динамика из последних известных данных, без сети.
+    const cachedValuations = buildCachedValuations(rows);
+    const mergedCached = applyFetchedValuations(rows, cachedValuations);
+    applyInsightsFromCache(rows, mergedCached);
+    const storedAt = latestStoredFetchedAt(rows);
+    if (storedAt) setRatesUpdatedAt(storedAt);
+
+    // 4) Живые котировки — поверх мгновенного кадра.
     const nextValuations = await refreshSpotValuations(rows);
-    await prefetchIntradayStockPrevClose(rows);
     setRatesUpdatedAt(new Date());
     applyInsightsFromCache(rows, nextValuations);
     void hydrateHistoryInsights(rows, nextValuations);
-  }, [refreshSpotValuations, applyInsightsFromCache, hydrateHistoryInsights]);
+  }, [
+    applyFetchedValuations,
+    refreshSpotValuations,
+    applyInsightsFromCache,
+    hydrateHistoryInsights,
+  ]);
 
   const handleHistoryPeriodChange = useCallback(
     (period: CapitalHistoryPeriod) => {
@@ -677,10 +616,44 @@ export function CapitalScreen() {
     [items, valuations]
   );
 
+  const allocation = useMemo(
+    () => buildCapitalAllocation(items, valuations),
+    [items, valuations]
+  );
+
+  const portfolioDay = useMemo(
+    () => aggregateAssetsSectionMetrics(items, valuations, insightsByPeriod['d1'] ?? {}, 'd1'),
+    [items, valuations, insightsByPeriod]
+  );
+
+  const heroDayChange = useMemo(
+    () =>
+      portfolioDay.insight
+        ? {
+            changeRub: portfolioDay.insight.changeRub,
+            changePercent: portfolioDay.insight.changePercent,
+          }
+        : null,
+    [portfolioDay]
+  );
+
+  const heroDayLoading =
+    portfolioDay.dynamicsExpected > 0 && portfolioDay.dynamicsResolved === 0;
+
   const hasLiveAssets = useMemo(
     () => items.some((item) => item.valuationMode === 'market' && item.isActive),
     [items]
   );
+
+  const heroRatesHint = useMemo(() => {
+    if (!hasLiveAssets) return null;
+    if (isRefreshingRates) return 'Обновляем котировки…';
+    if (!ratesUpdatedAt) return 'MOEX · CoinGecko · ЦБ РФ';
+    const diffSec = Math.floor((Date.now() - ratesUpdatedAt.getTime()) / 1000);
+    if (diffSec < 60) return 'Котировки только что · MOEX · CoinGecko';
+    const min = Math.floor(diffSec / 60);
+    return `Котировки ${min} мин назад · MOEX · CoinGecko`;
+  }, [hasLiveAssets, isRefreshingRates, ratesUpdatedAt, ratesLabelTick]);
 
   const brokerConnectionIds = useMemo(() => getBrokerConnectionIds(items), [items]);
 
@@ -1117,7 +1090,7 @@ export function CapitalScreen() {
             nestedScrollEnabled
           >
             <View style={styles.empty}>
-              <Text style={styles.emptyText}>В этой категории пока нет активов.</Text>
+              <Text style={styles.emptyText}>В этой категории пока нет активов</Text>
             </View>
           </ScrollView>
         );
@@ -1136,95 +1109,38 @@ export function CapitalScreen() {
           {renderMarketSection(buckets.cryptoItems)}
 
           {buckets.manualItems.length > 0 ? (
-            <>
-              {manualMetrics && manualMetrics.activeCount > 0 ? (
-                <View style={[styles.marketSection, { marginBottom: 12 }]}>
-                  <View style={styles.marketSectionCard}>
-                    <CapitalSectionSummary metrics={manualMetrics} />
-                  </View>
-                </View>
-              ) : null}
-              {buckets.manualItems.map((item) => {
-                const valuation = valuations[item.id];
-                const displayRub = valuation?.valueRub ?? item.amount;
-                const liveUnit = item.unit;
-                const liveQuantity = item.quantity;
-                const isLiveAsset =
-                  item.valuationMode === 'market' ||
-                  (item.assetType === 'cash' && liveQuantity && liveUnit);
-                const { title, sourceLabel } = getMarketAssetDisplay(item);
-
-                return (
-                  <View key={item.id} style={styles.card}>
-                    <View style={styles.itemRow}>
-                      <View style={styles.itemMain}>
-                        <Text style={styles.itemName}>{title}</Text>
-                        {sourceLabel ? (
-                          <Text style={styles.itemSource}>{sourceLabel}</Text>
-                        ) : null}
-                        <Text style={styles.itemMeta}>
-                          {getCapitalAssetTypeLabel(item.assetType)}
-                        </Text>
-                        {isLiveAsset && liveUnit && liveQuantity ? (
-                          <Text style={styles.itemMeta}>
-                            {formatQuantityLabel(liveQuantity, liveUnit)}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <Text style={styles.itemAmount}>
-                        ₽{displayRub.toLocaleString('ru-RU')}
-                      </Text>
-                    </View>
-                    <View style={[styles.itemRow, { marginTop: 12 }]}>
-                      <Text style={styles.itemMeta}>
-                        {item.isActive ? 'Учитывается в капитале' : 'Скрыт из суммы'}
-                      </Text>
-                      <View style={styles.itemActions}>
-                        <Switch
-                          value={item.isActive}
-                          onValueChange={(next) => handleToggle(item, next)}
-                          trackColor={{ false: colors.border, true: colors.accentSoft }}
-                          thumbColor={item.isActive ? colors.accent : colors.textMuted}
-                        />
-                        <TouchableOpacity onPress={() => handleUpdate(item)}>
-                          <Text style={styles.editLink}>
-                            {item.valuationMode === 'market'
-                              ? 'Изменить количество'
-                              : 'Обновить сумму'}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDelete(item)}>
-                          <Text style={styles.deleteLink}>Удалить</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </>
+            <View style={styles.marketSection}>
+              <View style={styles.marketSectionCard}>
+                {manualMetrics && manualMetrics.activeCount > 0 ? (
+                  <CapitalSectionSummary metrics={manualMetrics} />
+                ) : null}
+                {buckets.manualItems.map((item, index) => (
+                  <CapitalManualAssetRow
+                    key={item.id}
+                    item={item}
+                    valuation={valuations[item.id]}
+                    isLast={index === buckets.manualItems.length - 1}
+                    onPress={() => openAssetActions(item)}
+                  />
+                ))}
+              </View>
+            </View>
           ) : null}
         </ScrollView>
       );
   };
 
   return (
+    <CapitalCurrencyProvider>
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.screenBody}>
         <View style={styles.headerBlock}>
           <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Капитал</Text>
-              <Text style={styles.subtitle}>
-                Все активы в одном месте — сумма, живые курсы и динамика за период.
-              </Text>
-            </View>
+            <Text style={styles.screenTitle}>Капитал</Text>
             <View style={styles.headerActions}>
               {hasLiveAssets ? (
                 <TouchableOpacity
-                  style={[
-                    styles.refreshIconButton,
-                    isRefreshingRates && styles.refreshIconButtonDisabled,
-                  ]}
+                  style={[styles.iconButton, isRefreshingRates && styles.iconButtonDisabled]}
                   onPress={() => void handleRefreshRates()}
                   disabled={isRefreshingRates}
                   accessibilityRole="button"
@@ -1233,7 +1149,7 @@ export function CapitalScreen() {
                   {isRefreshingRates ? (
                     <ActivityIndicator color={colors.accent} size="small" />
                   ) : (
-                    <Text style={styles.refreshIcon}>↻</Text>
+                    <Ionicons name="refresh" size={18} color={colors.accentDark} />
                   )}
                 </TouchableOpacity>
               ) : null}
@@ -1242,21 +1158,19 @@ export function CapitalScreen() {
                 onPress={() => setAddSheetVisible(true)}
                 accessibilityLabel="Добавить актив"
               >
-                <Text style={styles.addButtonText}>+</Text>
+                <Ionicons name="add" size={22} color={colors.textOnAccent} />
               </TouchableOpacity>
             </View>
           </View>
 
           {activeTotal > 0 ? (
-            <View style={styles.totalHero}>
-              <Text style={styles.totalHeroLabel}>Всего активов</Text>
-              <Text style={styles.totalHeroValue}>₽{activeTotal.toLocaleString('ru-RU')}</Text>
-              {hasLiveAssets ? (
-                <Text style={styles.totalHeroHint}>
-                  Акции — MOEX · крипта — CoinGecko · валюта — ЦБ РФ
-                </Text>
-              ) : null}
-            </View>
+            <CapitalHeroCard
+              total={activeTotal}
+              dayChange={heroDayChange}
+              dayChangeLoading={heroDayLoading}
+              allocation={allocation}
+              ratesHint={heroRatesHint}
+            />
           ) : null}
 
           {items.length > 0 ? renderFixedCategoryChrome() : null}
@@ -1269,8 +1183,9 @@ export function CapitalScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>Портфель пуст</Text>
               <Text style={styles.emptyText}>
-                Пока нет активов. Нажмите «+» в правом верхнем углу, чтобы добавить первый.
+                Добавьте первый актив — акции, вклад, крипту или недвижимость.
               </Text>
             </View>
           </ScrollView>
@@ -1304,5 +1219,6 @@ export function CapitalScreen() {
         onSubmit={handleAddAsset}
       />
     </SafeAreaView>
+    </CapitalCurrencyProvider>
   );
 }

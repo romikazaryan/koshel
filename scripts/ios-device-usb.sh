@@ -8,6 +8,9 @@ export TOOLCHAINS="${TOOLCHAINS:-com.apple.dt.toolchain.XcodeDefault}"
 
 CONFIGURATION="${IOS_CONFIGURATION:-Debug}"
 TEAM_ID="${IOS_DEVELOPMENT_TEAM:-2FXLXGLR39}"
+# Основной телефон для установки — iPhone (3). Можно переопределить через
+# PREFERRED_DEVICE_ID или жёстко зафиксировать через IOS_DEVICE_ID.
+PREFERRED_DEVICE_ID="${PREFERRED_DEVICE_ID:-00008130-00046C840A90001C}"
 unset __EXPO_EAGER_BUNDLE_OPTIONS
 cd "$ROOT"
 
@@ -16,17 +19,49 @@ if [[ -d "$ROOT/ios" ]]; then
   (cd "$ROOT/ios" && pod install)
 fi
 
+list_connected_udids() {
+  # UDID физического iPhone имеет вид 00008130-00046C840A90001C (8 hex, дефис, 16 hex).
+  # Этот формат не пересекается ни с Mac, ни с UUID симуляторов (8-4-4-4-12),
+  # поэтому по нему можно надёжно выбрать именно реальное устройство.
+  #
+  # Берём только РЕАЛЬНО подключённые устройства (иначе xcodebuild не найдёт
+  # destination и упадёт с кодом 70). Совмещаем два источника:
+  #   1) devicectl — подключённые по USB и по сети;
+  #   2) xctrace, но СТРОГО секция "== Devices ==" (подключённые), без
+  #      "== Devices Offline ==" и "== Simulators ==" — на случай, если devicectl
+  #      по какой-то причине устройство не отдал.
+  {
+    xcrun devicectl list devices 2>/dev/null \
+      | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}'
+
+    xcrun xctrace list devices 2>/dev/null \
+      | awk '
+          /^== Devices ==/ { s="connected"; next }
+          /^== / { s="other"; next }
+          s=="connected"
+        ' \
+      | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}'
+  } | awk 'NF && !seen[$0]++'
+}
+
 resolve_device_udid() {
+  # Жёсткая фиксация устройства имеет наивысший приоритет.
   if [[ -n "${IOS_DEVICE_ID:-}" ]]; then
     echo "$IOS_DEVICE_ID"
     return
   fi
 
-  xcrun xctrace list devices 2>&1 \
-    | grep -E "^iPhone" \
-    | grep -v Simulator \
-    | head -1 \
-    | sed -E 's/.* \(([0-9A-F-]+)\)$/\1/'
+  local connected
+  connected="$(list_connected_udids)"
+
+  # Предпочитаем основной телефон (iPhone (3)), если он реально подключён.
+  if [[ -n "$connected" ]] && grep -qx "$PREFERRED_DEVICE_ID" <<<"$connected"; then
+    echo "$PREFERRED_DEVICE_ID"
+    return
+  fi
+
+  # Иначе — первое реально подключённое устройство.
+  head -1 <<<"$connected"
 }
 
 build_with_provisioning_updates() {
@@ -56,9 +91,12 @@ build_with_provisioning_updates() {
 
 find_built_app() {
   local app_path
+  # ВАЖНО: исключаем Index.noindex — там лежит устаревший бандл от индексатора Xcode,
+  # иначе на устройство уедет старая сборка.
   app_path="$(
     find "$HOME/Library/Developer/Xcode/DerivedData" \
       -path "*/Build/Products/${CONFIGURATION}-iphoneos/koshel.app" \
+      -not -path "*/Index.noindex/*" \
       -type d 2>/dev/null \
       | head -1
   )"
@@ -73,7 +111,8 @@ install_on_device() {
   local udid="$1"
   local app_path="$2"
   echo "→ Установка на iPhone…"
-  if xcrun devicectl device install app --device "$udid" "$app_path" 2>/dev/null; then
+  echo "  ($app_path)"
+  if xcrun devicectl device install app --device "$udid" "$app_path"; then
     return 0
   fi
   # Fallback for older Xcode toolchains
@@ -81,7 +120,9 @@ install_on_device() {
     ios-deploy --id "$udid" --bundle "$app_path" --justlaunch
     return 0
   fi
-  echo "Установите вручную из Xcode (Product → Run) или: xcrun devicectl device install app --device $udid \"$app_path\""
+  echo "Не удалось установить автоматически. Вручную:" >&2
+  echo "  xcrun devicectl device install app --device $udid \"$app_path\"" >&2
+  return 1
 }
 
 print_signing_help() {
@@ -108,10 +149,18 @@ EOF
 
 DEVICE_UDID="$(resolve_device_udid || true)"
 if [[ -z "${DEVICE_UDID:-}" ]]; then
-  echo "→ iPhone не найден — запускаем expo run:ios…"
-  npx expo run:ios --device
+  echo "→ Подключённый iPhone не найден (devicectl/xctrace пусты)."
+  echo "  Подключите iPhone (3) по USB, разблокируйте экран и нажмите «Доверять»."
+  echo "  Передаём выбор устройства expo…"
+  expo_args=(expo run:ios --device)
+  # Важно: без этого фолбэк собирает Debug (нужен Metro), а мы хотим Release.
+  if [[ "$CONFIGURATION" == "Release" ]]; then
+    expo_args+=(--configuration Release)
+  fi
+  npx "${expo_args[@]}"
   exit $?
 fi
+echo "→ Целевое устройство: $DEVICE_UDID"
 
 set +e
 build_with_provisioning_updates "$DEVICE_UDID"
@@ -131,9 +180,17 @@ install_on_device "$DEVICE_UDID" "$APP_PATH"
 
 echo ""
 echo "✓ koshel установлен на iPhone."
+echo ""
+echo "Если при первом запуске видите «Ненадёжный разработчик» / приложение не"
+echo "открывается (invalid code signature / profile not trusted) — это нормально"
+echo "для бесплатного Apple ID. Один раз доверьтесь профилю на самом телефоне:"
+echo "  Настройки → Основные → VPN и управление устройством →"
+echo "  Разработчик «Apple Development: …» → «Доверять»."
 if [[ "$CONFIGURATION" == "Release" ]]; then
+  echo ""
   echo "Откройте приложение — Metro не нужен."
   echo "«Поделиться» из банка: Koshel появится после установки этой сборки."
 else
+  echo ""
   echo "Debug: перед запуском нужен Metro (npm run start:iphone-usb)."
 fi

@@ -2,15 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
-  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
 import { findOrCreateBankConnection, requestBankStatementImport } from '../../lib/financialConnections';
 import { invalidateDashboardCache } from '../../lib/dashboardCache';
 import {
@@ -26,6 +28,7 @@ import {
   type StatementParseResult,
 } from '../../lib/bankStatementImport';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
@@ -103,6 +106,8 @@ export function BankStatementImportSheet({
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps } =
+    useSwipeDownToClose(visible, onClose, { mode: 'header' });
   const [parsing, setParsing] = useState(false);
   const [parsingHint, setParsingHint] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -116,7 +121,10 @@ export function BankStatementImportSheet({
       overlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(0,0,0,0.45)',
+      },
+      dim: {
+        ...StyleSheet.absoluteFill,
+        backgroundColor: c.overlay,
       },
       sheet: {
         backgroundColor: c.surface,
@@ -397,16 +405,22 @@ export function BankStatementImportSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.title}>Банковская выписка</Text>
-            <Text style={styles.subtitle}>
-              {providerName} · CSV или PDF — операции попадут в расходы и доходы
-            </Text>
-          </View>
+    <Modal visible={visible} animationType="none" transparent presentationStyle="overFullScreen" onRequestClose={close}>
+      <GestureHandlerRootView style={{ flex: 1 }} pointerEvents="box-none">
+      <View style={styles.overlay} pointerEvents="box-none">
+        <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <PanGestureHandler {...panGestureProps}>
+            <View>
+              <View style={styles.handle} />
+              <View style={styles.header}>
+                <Text style={styles.title}>Банковская выписка</Text>
+                <Text style={styles.subtitle}>
+                  {providerName} · CSV или PDF — операции попадут в расходы и доходы
+                </Text>
+              </View>
+            </View>
+          </PanGestureHandler>
 
           <View style={styles.stack}>
             <View style={styles.accountKindBlock}>
@@ -549,12 +563,13 @@ export function BankStatementImportSheet({
               </TouchableOpacity>
             ) : null}
 
-            <TouchableOpacity style={styles.cancelBtn} onPress={onClose} disabled={importing}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={close} disabled={importing}>
               <Text style={styles.cancelBtnText}>Отмена</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </Pressable>
+        </Animated.View>
+      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

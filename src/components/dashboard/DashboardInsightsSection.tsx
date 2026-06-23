@@ -1,9 +1,10 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { CategoryChart } from '../CategoryChart';
 import { HealthScoreCard } from '../HealthScoreCard';
 import { MonthlyBudgetCard } from '../MonthlyBudgetCard';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import { Card } from '../ui/Card';
+import { Button } from '../ui/Button';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import type { AnalysisPeriodMonths } from '../../types/monthAnalysis';
 import type { Category } from '../../types';
@@ -165,14 +166,11 @@ export function DashboardInsightsSection({
             value={String(analysisPeriod)}
             onChange={(value) => onPeriodChange(Number(value) as AnalysisPeriodMonths)}
           />
-          <TouchableOpacity
-            style={[styles.button, analyzing && styles.buttonDisabled]}
+          <Button
+            label={analyzing ? 'Анализируем…' : 'Анализировать'}
             onPress={onAnalyze}
-            disabled={analyzing}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.buttonText}>{analyzing ? 'Анализируем…' : 'Анализировать'}</Text>
-          </TouchableOpacity>
+            loading={analyzing}
+          />
         </View>
       </Card>
     </>

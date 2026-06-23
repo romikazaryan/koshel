@@ -55,7 +55,7 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
 
   const styles = useThemedStyles(({ colors: c, cardBase }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       scroll: { flex: 1 },
       content: { paddingHorizontal: 20, paddingBottom: 40 },
       backButton: { marginBottom: 8 },

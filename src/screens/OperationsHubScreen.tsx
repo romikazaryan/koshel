@@ -25,7 +25,7 @@ export function OperationsHubScreen({ navigation, route }: Props) {
 
   const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
-      safeArea: { flex: 1, backgroundColor: c.background },
+      safeArea: { flex: 1, backgroundColor: 'transparent' },
       header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
       topRow: {
         flexDirection: 'row',

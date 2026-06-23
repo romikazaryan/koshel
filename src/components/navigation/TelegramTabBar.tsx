@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../contexts/ThemeContext';
+import { hexToRgba } from '../../lib/colorUtils';
 import { TabBarGlassBackground } from './TabBarGlassBackground';
 
 export const TELEGRAM_TAB_BAR_HEIGHT = 56;
@@ -75,9 +76,9 @@ export function TelegramTabBar({ state, descriptors, navigation }: BottomTabBarP
     setBarWidth(event.nativeEvent.layout.width);
   };
 
-  const barBorder = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)';
-  const pillBackground = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.82)';
-  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.9)';
+  const barBorder = hexToRgba(isDark ? colors.accent : colors.navy, isDark ? 0.14 : 0.08);
+  const pillBackground = hexToRgba(colors.accent, isDark ? 0.16 : 0.14);
+  const pillBorder = hexToRgba(colors.accent, isDark ? 0.28 : 0.22);
 
   return (
     <View
@@ -100,7 +101,7 @@ export function TelegramTabBar({ state, descriptors, navigation }: BottomTabBarP
         ]}
       >
         <View style={[styles.barShell, { borderColor: barBorder }]}>
-          <TabBarGlassBackground isDark={isDark} />
+          <TabBarGlassBackground isDark={isDark} surface={colors.surface} accent={colors.accent} />
 
           <View style={styles.barContent} onLayout={onBarLayout}>
             {pillWidth > 0 ? (

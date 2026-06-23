@@ -1,22 +1,21 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { normalizeRuPhoneE164 } from '../lib/phone';
 import { FadeSlideIn } from '../components/animations/FadeSlideIn';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { KoshelLogo } from '../components/brand/KoshelLogo';
 import { LOGO_SIZE } from '../components/brand/koshelLogoStyles';
-import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type AuthMethod = 'email' | 'phone';
@@ -25,10 +24,9 @@ type PhoneStep = 'phone' | 'code';
 
 export function AuthScreen() {
   const { signIn, signUp, sendPhoneOtp, verifyPhoneOtp } = useAuth();
-  const { colors } = useAppTheme();
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      root: { flex: 1, backgroundColor: c.background },
+      root: { flex: 1, backgroundColor: 'transparent' },
       container: { flexGrow: 1, padding: 24, paddingTop: 72, justifyContent: 'center' },
       logo: { marginBottom: 8, alignSelf: 'center' },
       subtitle: { fontSize: 16, color: c.textSecondary, marginBottom: 28 },
@@ -64,32 +62,7 @@ export function AuthScreen() {
       label: { fontSize: 13, color: c.textMuted, marginBottom: 8, fontWeight: '600' },
       hint: { marginTop: 8, fontSize: 12, color: c.textMuted, lineHeight: 18 },
       phoneSent: { fontSize: 14, color: c.textSecondary, marginBottom: 16 },
-      input: {
-        backgroundColor: c.surface,
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: radii.md,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
-        color: c.text,
-      },
       otpInput: { letterSpacing: 4, textAlign: 'center', fontSize: 22, fontWeight: '700' },
-      primaryButton: {
-        marginTop: 8,
-        backgroundColor: c.accent,
-        borderRadius: radii.lg,
-        paddingVertical: 16,
-        alignItems: 'center',
-        shadowColor: c.accent,
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 4,
-      },
-      primaryButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      linkButton: { marginTop: 14, alignItems: 'center' },
-      linkButtonText: { color: c.accentDark, fontWeight: '600', fontSize: 15 },
     })
   );
 
@@ -257,8 +230,7 @@ export function AuthScreen() {
 
             <View style={styles.field}>
               <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 value={email}
                 onChangeText={setEmail}
                 autoCapitalize="none"
@@ -266,38 +238,28 @@ export function AuthScreen() {
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 placeholder="you@example.com"
-                placeholderTextColor={colors.textMuted}
                 editable={!isSubmitting}
               />
             </View>
 
             <View style={styles.field}>
               <Text style={styles.label}>Пароль</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
                 textContentType={emailMode === 'signIn' ? 'password' : 'newPassword'}
                 placeholder="минимум 6 символов"
-                placeholderTextColor={colors.textMuted}
                 editable={!isSubmitting}
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <Button
+              label={emailMode === 'signIn' ? 'Войти' : 'Зарегистрироваться'}
               onPress={() => void submitEmail()}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.textOnAccent} />
-              ) : (
-                <Text style={styles.primaryButtonText}>
-                  {emailMode === 'signIn' ? 'Войти' : 'Зарегистрироваться'}
-                </Text>
-              )}
-            </TouchableOpacity>
+              loading={isSubmitting}
+              style={{ marginTop: 8 }}
+            />
           </>
           </FadeSlideIn>
         )}
@@ -307,30 +269,23 @@ export function AuthScreen() {
           <>
             <View style={styles.field}>
               <Text style={styles.label}>Номер телефона</Text>
-              <TextInput
-                style={styles.input}
+              <Input
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 placeholder="9001234567"
-                placeholderTextColor={colors.textMuted}
+                hint="Россия: +7 и 10 цифр. Код придёт в SMS."
                 editable={!isSubmitting}
               />
-              <Text style={styles.hint}>Россия: +7 и 10 цифр. Код придёт в SMS.</Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <Button
+              label="Получить код"
               onPress={() => void submitPhoneOtpRequest()}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.textOnAccent} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Получить код</Text>
-              )}
-            </TouchableOpacity>
+              loading={isSubmitting}
+              style={{ marginTop: 8 }}
+            />
           </>
           </FadeSlideIn>
         )}
@@ -342,49 +297,45 @@ export function AuthScreen() {
 
             <View style={styles.field}>
               <Text style={styles.label}>Код из SMS</Text>
-              <TextInput
-                style={[styles.input, styles.otpInput]}
+              <Input
+                style={styles.otpInput}
                 value={otpCode}
                 onChangeText={setOtpCode}
                 keyboardType="number-pad"
                 textContentType="oneTimeCode"
                 placeholder="123456"
-                placeholderTextColor={colors.textMuted}
                 maxLength={8}
                 editable={!isSubmitting}
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <Button
+              label="Войти"
               onPress={() => void submitPhoneVerify()}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.textOnAccent} />
-              ) : (
-                <Text style={styles.primaryButtonText}>Войти</Text>
-              )}
-            </TouchableOpacity>
+              loading={isSubmitting}
+              style={{ marginTop: 8 }}
+            />
 
-            <TouchableOpacity
-              style={styles.linkButton}
+            <Button
+              label="Изменить номер"
+              variant="ghost"
+              size="md"
               onPress={() => {
                 setPhoneStep('phone');
                 setOtpCode('');
               }}
               disabled={isSubmitting}
-            >
-              <Text style={styles.linkButtonText}>Изменить номер</Text>
-            </TouchableOpacity>
+              style={{ marginTop: 10 }}
+            />
 
-            <TouchableOpacity
-              style={styles.linkButton}
+            <Button
+              label="Отправить код снова"
+              variant="ghost"
+              size="md"
               onPress={() => void submitPhoneOtpRequest()}
               disabled={isSubmitting}
-            >
-              <Text style={styles.linkButtonText}>Отправить код снова</Text>
-            </TouchableOpacity>
+              style={{ marginTop: 2 }}
+            />
           </>
           </FadeSlideIn>
         )}

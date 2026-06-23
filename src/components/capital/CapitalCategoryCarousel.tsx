@@ -23,9 +23,9 @@ type Props<T extends string> = {
   pageWidth: number;
 };
 
-const PEEK_WIDTH = 56;
-const SLOT_GAP = 24;
-const LABEL_FONT_SIZE = 18;
+const PEEK_WIDTH = 44;
+const SLOT_GAP = 16;
+const LABEL_FONT_SIZE = 14;
 
 function formatLabel(label: string, count?: number) {
   if (count == null) return label;
@@ -51,7 +51,7 @@ export function CapitalCategoryCarousel<T extends string>({
       measureText: {
         fontSize: LABEL_FONT_SIZE,
         fontWeight: '700',
-        letterSpacing: 0.2,
+        letterSpacing: 0.15,
       },
       viewport: {
         overflow: 'hidden',
@@ -64,37 +64,34 @@ export function CapitalCategoryCarousel<T extends string>({
       slot: {
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 44,
+        minHeight: 34,
       },
       glassPill: {
         position: 'absolute',
-        top: 2,
-        bottom: 2,
-        left: 6,
-        right: 6,
+        top: 1,
+        bottom: 1,
+        left: 4,
+        right: 4,
         borderRadius: radii.pill,
-        backgroundColor: c.accentSoft,
+        backgroundColor: c.primarySoft,
         borderWidth: 1,
-        borderColor: `${c.accent}40`,
+        borderColor: `${c.accent}33`,
       },
       labelText: {
         fontSize: LABEL_FONT_SIZE,
         fontWeight: '700',
-        color: c.accent,
-        letterSpacing: 0.2,
+        color: c.accentDark,
+        letterSpacing: 0.15,
       },
     })
   );
 
-  const handleMeasure = useCallback(
-    (event: LayoutChangeEvent) => {
-      const width = Math.ceil(event.nativeEvent.layout.width);
-      if (width > 0) {
-        setSlotWidth((prev) => (width > prev ? width + SLOT_GAP : prev));
-      }
-    },
-    []
-  );
+  const handleMeasure = useCallback((event: LayoutChangeEvent) => {
+    const width = Math.ceil(event.nativeEvent.layout.width);
+    if (width > 0) {
+      setSlotWidth((prev) => (width > prev ? width + SLOT_GAP : prev));
+    }
+  }, []);
 
   const viewportWidth = slotWidth > 0 ? slotWidth + PEEK_WIDTH * 2 : undefined;
 
@@ -121,8 +118,8 @@ export function CapitalCategoryCarousel<T extends string>({
     return (
       <View style={styles.viewport}>
         <View style={styles.slot}>
-          <View style={[styles.glassPill, { opacity: 0.82 }]} />
-          <Text style={[styles.labelText, { opacity: 0.9 }]}>
+          <View style={[styles.glassPill, { opacity: 0.9 }]} />
+          <Text style={[styles.labelText, { opacity: 0.92 }]}>
             {formatLabel(only.label, only.count)}
           </Text>
         </View>
@@ -134,11 +131,7 @@ export function CapitalCategoryCarousel<T extends string>({
     <View>
       <View style={styles.measureWrap}>
         {options.map((option) => (
-          <Text
-            key={option.value}
-            style={styles.measureText}
-            onLayout={handleMeasure}
-          >
+          <Text key={option.value} style={styles.measureText} onLayout={handleMeasure}>
             {formatLabel(option.label, option.count)}
           </Text>
         ))}
@@ -150,18 +143,14 @@ export function CapitalCategoryCarousel<T extends string>({
             {options.map((option, index) => {
               const focusInput =
                 pageWidth > 0
-                  ? [
-                      (index - 1) * pageWidth,
-                      index * pageWidth,
-                      (index + 1) * pageWidth,
-                    ]
+                  ? [(index - 1) * pageWidth, index * pageWidth, (index + 1) * pageWidth]
                   : [0, 0, 0];
 
               const glassOpacity =
                 pageWidth > 0
                   ? scrollX.interpolate({
                       inputRange: focusInput,
-                      outputRange: [0, 0.78, 0],
+                      outputRange: [0, 0.92, 0],
                       extrapolate: 'clamp',
                     })
                   : 0;
@@ -170,10 +159,10 @@ export function CapitalCategoryCarousel<T extends string>({
                 pageWidth > 0
                   ? scrollX.interpolate({
                       inputRange: focusInput,
-                      outputRange: [0.36, 0.9, 0.36],
+                      outputRange: [0.32, 1, 0.32],
                       extrapolate: 'clamp',
                     })
-                  : 0.9;
+                  : 0.92;
 
               return (
                 <TouchableOpacity
@@ -200,9 +189,7 @@ export function CapitalCategoryCarousel<T extends string>({
           </Animated.View>
         </View>
       ) : (
-        <Text style={styles.labelText}>
-          {formatLabel(options[0]?.label ?? '', options[0]?.count)}
-        </Text>
+        <Text style={styles.labelText}>{formatLabel(options[0]?.label ?? '', options[0]?.count)}</Text>
       )}
     </View>
   );

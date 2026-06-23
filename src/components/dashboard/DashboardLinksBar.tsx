@@ -1,4 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
@@ -9,9 +11,9 @@ type Props = {
 };
 
 const ACTIONS = [
-  { key: 'import', icon: '🏦', label: 'Выписка', hint: 'CSV · PDF' },
-  { key: 'capital', icon: '💰', label: 'Капитал', hint: 'активы' },
-  { key: 'imports', icon: '📋', label: 'Импорты', hint: 'история' },
+  { key: 'import', icon: 'document-text-outline', label: 'Выписка', hint: 'CSV · PDF' },
+  { key: 'capital', icon: 'trending-up-outline', label: 'Капитал', hint: 'активы' },
+  { key: 'imports', icon: 'time-outline', label: 'Импорты', hint: 'история' },
 ] as const;
 
 export function DashboardLinksBar({
@@ -20,6 +22,7 @@ export function DashboardLinksBar({
   onOpenCapital,
   onOpenImports,
 }: Props) {
+  const { colors } = useAppTheme();
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
       row: {
@@ -38,9 +41,14 @@ export function DashboardLinksBar({
         alignItems: 'center',
         ...shadows.soft,
       },
-      icon: {
-        fontSize: 20,
-        marginBottom: 4,
+      iconBadge: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: c.accentSoft,
+        marginBottom: 7,
       },
       label: {
         fontSize: 12,
@@ -59,6 +67,7 @@ export function DashboardLinksBar({
         fontWeight: '800',
         color: c.accentDark,
         marginTop: 1,
+        fontVariant: ['tabular-nums'],
       },
     })
   );
@@ -80,7 +89,9 @@ export function DashboardLinksBar({
           accessibilityRole="button"
           accessibilityLabel={action.label}
         >
-          <Text style={styles.icon}>{action.icon}</Text>
+          <View style={styles.iconBadge}>
+            <Ionicons name={action.icon} size={19} color={colors.accent} />
+          </View>
           <Text style={styles.label}>{action.label}</Text>
           {action.key === 'capital' ? (
             <Text style={styles.capitalValue}>₽{capitalTotal.toLocaleString('ru-RU')}</Text>

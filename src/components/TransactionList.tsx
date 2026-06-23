@@ -90,7 +90,7 @@ export function TransactionList({
         gap: 12,
       },
       itemTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
-      amount: { fontSize: 16, fontWeight: '800', color: colors.text },
+      amount: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
       amountIncome: { color: colors.incomeDark },
       rowBottom: {
         flexDirection: 'row',

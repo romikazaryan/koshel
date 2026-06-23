@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppTheme } from '../../contexts/ThemeContext';
+import { darkColors } from '../../theme/colors';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Props = {
@@ -76,8 +77,8 @@ export function DashboardOverviewHero({
         textTransform: 'uppercase',
         letterSpacing: 0.4,
       },
-      metricLabelIncome: { color: c.income },
-      metricLabelExpense: { color: '#FCA5A5' },
+      metricLabelIncome: { color: darkColors.income },
+      metricLabelExpense: { color: darkColors.expense },
       metricChevron: {
         fontSize: 16,
         lineHeight: 18,

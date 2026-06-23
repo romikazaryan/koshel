@@ -12,17 +12,23 @@ type Props = {
 };
 
 export function CapitalHistoryPeriodToggle({ value, onChange }: Props) {
-  const styles = useThemedStyles(({ colors: c }) =>
+  const styles = useThemedStyles(({ colors: c, radii }) =>
     StyleSheet.create({
       button: {
-        paddingVertical: 2,
-        paddingHorizontal: 2,
+        alignSelf: 'flex-end',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: radii.pill,
+        backgroundColor: c.surfaceMuted,
+        borderWidth: 1,
+        borderColor: c.borderLight,
       },
       label: {
-        fontSize: 13,
-        fontWeight: '500',
+        fontSize: 11,
+        fontWeight: '700',
         color: c.textMuted,
-        letterSpacing: 0.1,
+        letterSpacing: 0.2,
+        textTransform: 'uppercase',
       },
     })
   );

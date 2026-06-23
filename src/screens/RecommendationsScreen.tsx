@@ -59,7 +59,7 @@ function OptimizationCard({
 
 function createStyles({ colors: c, cardBase, radii }: Parameters<Parameters<typeof useThemedStyles>[0]>[0]) {
   return StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: c.background },
+    safeArea: { flex: 1, backgroundColor: 'transparent' },
     container: { flex: 1 },
     contentContainer: { padding: 20, paddingBottom: 40 },
     backButton: { marginBottom: 12 },

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
 import { MarketSearchPicker } from '../MarketSearchPicker';
 import { CAPITAL_ASSET_TYPES } from '../../constants/capitalTypes';
 import {
@@ -25,8 +27,11 @@ import {
 } from '../../constants/marketUnits';
 import { searchCoingeckoCoins, searchMoexStocks, type MarketSearchItem } from '../../lib/marketSearch';
 import type { CapitalAssetType } from '../../types';
+import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
+
+const AnimatedKeyboardAvoidingView = Animated.createAnimatedComponent(KeyboardAvoidingView);
 
 function usesMarketValuation(type: CapitalAssetType) {
   return type === 'crypto' || type === 'cash' || type === 'stocks';
@@ -83,6 +88,8 @@ type Props = {
 export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps, onScroll } =
+    useSwipeDownToClose(visible, onClose, { mode: 'header' });
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -123,8 +130,11 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
     StyleSheet.create({
       overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.45)',
         justifyContent: 'flex-end',
+      },
+      dim: {
+        ...StyleSheet.absoluteFill,
+        backgroundColor: c.overlay,
       },
       sheet: {
         width: '100%',
@@ -135,6 +145,17 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
         borderTopRightRadius: radii.xl,
         paddingBottom: Math.max(insets.bottom, 16),
         ...shadows.soft,
+      },
+      dragArea: {
+        alignItems: 'center',
+        paddingTop: 10,
+        paddingBottom: 2,
+      },
+      handle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: c.border,
       },
       header: {
         flexDirection: 'row',
@@ -280,29 +301,39 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="none"
       transparent
       presentationStyle="overFullScreen"
-      onRequestClose={onClose}
+      onRequestClose={close}
     >
-      <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
-        <KeyboardAvoidingView
+      <GestureHandlerRootView style={{ flex: 1 }} pointerEvents="box-none">
+      <View style={styles.overlay} pointerEvents="box-none">
+        <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
+        <AnimatedKeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.sheet}
+          style={[styles.sheet, { transform: [{ translateY }] }]}
         >
-          <View style={styles.header}>
-            <Text style={styles.title}>Добавить актив</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={onClose} accessibilityLabel="Закрыть">
-              <Text style={styles.closeText}>×</Text>
-            </TouchableOpacity>
-          </View>
+          <PanGestureHandler {...panGestureProps}>
+            <View>
+              <View style={styles.dragArea}>
+                <View style={styles.handle} />
+              </View>
+              <View style={styles.header}>
+                <Text style={styles.title}>Добавить актив</Text>
+                <TouchableOpacity style={styles.closeButton} onPress={close} accessibilityLabel="Закрыть">
+                  <Text style={styles.closeText}>×</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </PanGestureHandler>
 
           <ScrollView
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
           >
             <Text style={styles.cardLabel}>Тип актива</Text>
             <View style={styles.types}>
@@ -419,8 +450,9 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
               )}
             </TouchableOpacity>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </AnimatedKeyboardAvoidingView>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
