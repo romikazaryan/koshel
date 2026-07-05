@@ -2,6 +2,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './ui/Card';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { useThemedStyles } from '../theme/useThemedStyles';
+import { moneyText } from '../theme/layout';
+import { formatMoney } from '../lib/formatMoney';
 
 type Props = {
   monthlyBudget: number;
@@ -37,11 +39,13 @@ export function MonthlyBudgetCard({
         fontSize: compact ? 22 : 28,
         fontWeight: '800',
         color: c.text,
+        ...moneyText,
       },
       limit: {
         fontSize: compact ? 13 : 15,
         color: c.textMuted,
         fontWeight: '600',
+        ...moneyText,
       },
       track: {
         height: compact ? 8 : 10,
@@ -81,15 +85,15 @@ export function MonthlyBudgetCard({
   const barColor = isOver ? colors.danger : spentPercent >= 85 ? colors.warning : colors.expense;
 
   const hintText = isOver
-    ? `+₽${Math.abs(remaining).toLocaleString('ru-RU')}`
-    : `−₽${remaining.toLocaleString('ru-RU')}`;
+    ? `+${formatMoney(Math.abs(remaining))}`
+    : `−${formatMoney(remaining)}`;
 
   const content = (
     <>
       <Text style={styles.title}>Лимит на месяц</Text>
       <View style={styles.row}>
-        <Text style={styles.spent}>₽{totalExpenses.toLocaleString('ru-RU')}</Text>
-        <Text style={styles.limit}>/ ₽{monthlyBudget.toLocaleString('ru-RU')}</Text>
+        <Text style={styles.spent}>{formatMoney(totalExpenses)}</Text>
+        <Text style={styles.limit}>/ {formatMoney(monthlyBudget)}</Text>
       </View>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${spentPercent}%`, backgroundColor: barColor }]} />

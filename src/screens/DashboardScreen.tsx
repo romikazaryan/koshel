@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   InteractionManager,
-  Modal,
   View,
-  Text,
   ScrollView,
   StyleSheet,
   RefreshControl,
@@ -14,34 +11,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { DashboardAtmosphereHeader } from '../components/dashboard/DashboardAtmosphereHeader';
+import { DashboardEmptyHint } from '../components/dashboard/DashboardEmptyHint';
 import { DashboardOverviewHero } from '../components/dashboard/DashboardOverviewHero';
 import { DashboardLinksBar } from '../components/dashboard/DashboardLinksBar';
 import { DashboardInsightsSection } from '../components/dashboard/DashboardInsightsSection';
+import { AnalyzeMonthOverlay } from '../components/dashboard/AnalyzeMonthOverlay';
 import { useAuth } from '../contexts/AuthContext';
 import { hasSupabase, supabase } from '../lib/supabase';
 import { getEdgeFunctionErrorMessage } from '../lib/edgeFunctionErrors';
 import {
   monthCacheKey,
+  invalidateDashboardCache,
   readDashboardCache,
   readDashboardCacheSync,
   writeDashboardCache,
 } from '../lib/dashboardCache';
-import { fetchMonthlyBudget } from '../lib/userSettings';
-import { formatMonthGenitive, formatMonthLabel, getMonthRange, getTodayMonth, type MonthRef } from '../lib/month';
+import { refreshSessionOnce } from '../lib/authSession';
+import { withNetworkRetries } from '../lib/asyncUtils';
 import {
   buildMonthAnalysisPayload,
   getAnalysisDateRange,
   analysisPeriodHint,
   parseMonthAnalysisResult,
 } from '../lib/monthAnalysisPayload';
-import type { AnalysisPeriodMonths } from '../types/monthAnalysis';
+import { fetchMonthlyBudget } from '../lib/userSettings';
+import { formatMonthGenitive, formatMonthLabel, getMonthRange, getTodayMonth, type MonthRef } from '../lib/month';
 import {
-  getActiveSubscriptionsForMonth,
   getSubscriptionsTotalForMonth,
   fetchSubscriptions,
 } from '../lib/subscriptions';
 import {
-  getActiveDebtsForMonth,
   getDebtsTotalForMonth,
   fetchDebts,
 } from '../lib/debts';
@@ -51,6 +50,9 @@ import {
   getCapitalTotal,
 } from '../lib/capital';
 import { formatRecurringExpenseHint } from '../lib/recurringExpenseHint';
+import { consumeFirstExpensePrompt } from '../lib/onboarding';
+import { exportMonthReportPdf } from '../lib/exportMonthReport';
+import type { AnalysisPeriodMonths } from '../types/monthAnalysis';
 import { isEarnedIncome, sumPurchaseRefunds } from '../lib/purchaseRefunds';
 import { withTimeout } from '../lib/asyncUtils';
 import { Transaction, Category, type Subscription, type Debt, type CapitalAsset } from '../types';
@@ -78,10 +80,17 @@ const calculateHealthScore = (transactions: Transaction[], income: number, balan
   return Math.max(0, score);
 };
 
-export function DashboardScreen({ navigation }: Props) {
+export function DashboardScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const { colors } = useAppTheme();
   const { openManualImport, setOnImportedListener } = useBankStatementImport();
+
+  useEffect(() => {
+    if (route.params?.openImport) {
+      openManualImport();
+      navigation.setParams({ openImport: undefined });
+    }
+  }, [route.params?.openImport, openManualImport, navigation]);
   const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
       safeArea: {
@@ -96,35 +105,6 @@ export function DashboardScreen({ navigation }: Props) {
         paddingTop: 4,
         paddingBottom: 32,
       },
-      analyzeOverlay: {
-        flex: 1,
-        backgroundColor: c.overlay,
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-      },
-      analyzeOverlayCard: {
-        backgroundColor: c.surface,
-        borderRadius: 20,
-        paddingVertical: 28,
-        paddingHorizontal: 32,
-        alignItems: 'center',
-        minWidth: 260,
-        borderWidth: 1,
-        borderColor: c.borderLight,
-      },
-      analyzeOverlayTitle: {
-        marginTop: 16,
-        fontSize: 18,
-        fontWeight: '700',
-        color: c.text,
-      },
-      analyzeOverlayHint: {
-        marginTop: 8,
-        fontSize: 14,
-        color: c.textMuted,
-        textAlign: 'center',
-      },
     })
   );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -135,6 +115,8 @@ export function DashboardScreen({ navigation }: Props) {
   const [capitalAssets, setCapitalAssets] = useState<CapitalAsset[]>([]);
   const [monthlyBudget, setMonthlyBudget] = useState<number | null>(null);
   const [isUserRefreshing, setIsUserRefreshing] = useState(false);
+  const [isExportingReport, setIsExportingReport] = useState(false);
+  const [isDashboardReady, setIsDashboardReady] = useState(false);
   const [showHeavyWidgets, setShowHeavyWidgets] = useState(false);
   const hasLoadedOnceRef = useRef(false);
   const lastFetchAtRef = useRef(0);
@@ -170,13 +152,16 @@ export function DashboardScreen({ navigation }: Props) {
     [debts, selectedMonth]
   );
   const capitalTotal = useMemo(() => getCapitalTotal(capitalAssets), [capitalAssets]);
+  // Подписки и долги — это план обязательных платежей, а не фактические траты.
+  // Фактические расходы = только реальные операции (совпадает с экраном истории),
+  // иначе при импорте выписки подписка считалась бы дважды.
   const recurringExpenseHint = useMemo(
     () => formatRecurringExpenseHint(subscriptionsTotal, debtsTotal),
     [subscriptionsTotal, debtsTotal]
   );
   const totalExpenses = useMemo(
-    () => transactionExpenses - purchaseRefundTotal + subscriptionsTotal + debtsTotal,
-    [transactionExpenses, purchaseRefundTotal, subscriptionsTotal, debtsTotal]
+    () => transactionExpenses - purchaseRefundTotal,
+    [transactionExpenses, purchaseRefundTotal]
   );
   const balance = useMemo(() => totalIncome - totalExpenses, [totalIncome, totalExpenses]);
 
@@ -186,43 +171,11 @@ export function DashboardScreen({ navigation }: Props) {
       const cat = item.category as Category;
       grouping.set(cat, (grouping.get(cat) ?? 0) + item.amount);
     });
-    getActiveSubscriptionsForMonth(subscriptions, selectedMonth).forEach((sub) => {
-      const cat = sub.category as Category;
-      grouping.set(cat, (grouping.get(cat) ?? 0) + sub.amount);
-    });
-    getActiveDebtsForMonth(debts, selectedMonth).forEach((debt) => {
-      grouping.set('Другое', (grouping.get('Другое') ?? 0) + debt.monthlyPayment);
-    });
     return Array.from(grouping.entries()).map(([category, amount]) => ({ category, amount }));
-  }, [monthExpenses, subscriptions, debts, selectedMonth]);
+  }, [monthExpenses]);
   const healthScore = useMemo(() => {
-    const subAsExpenses: Transaction[] = getActiveSubscriptionsForMonth(
-      subscriptions,
-      selectedMonth
-    ).map((sub) => ({
-      id: `sub-${sub.id}`,
-      title: sub.name,
-      amount: sub.amount,
-      category: sub.category,
-      date: '',
-      kind: 'expense' as const,
-    }));
-    const debtAsExpenses: Transaction[] = getActiveDebtsForMonth(debts, selectedMonth).map(
-      (debt) => ({
-        id: `debt-${debt.id}`,
-        title: debt.name,
-        amount: debt.monthlyPayment,
-        category: 'Другое',
-        date: '',
-        kind: 'expense' as const,
-      })
-    );
-    return calculateHealthScore(
-      [...monthExpenses, ...subAsExpenses, ...debtAsExpenses],
-      Math.max(totalIncome, 1),
-      balance
-    );
-  }, [monthExpenses, subscriptions, debts, selectedMonth, totalIncome, balance]);
+    return calculateHealthScore(monthExpenses, Math.max(totalIncome, 1), balance);
+  }, [monthExpenses, totalIncome, balance]);
 
   const mapTransactions = useCallback(
     (rows: Array<Record<string, unknown>>): Transaction[] =>
@@ -248,6 +201,7 @@ export function DashboardScreen({ navigation }: Props) {
       if (!user?.id) return;
       if (loadInFlightRef.current && !options?.force) return;
 
+      const client = supabase;
       const range = getMonthRange(selectedMonth);
       const userId = user.id;
 
@@ -261,29 +215,35 @@ export function DashboardScreen({ navigation }: Props) {
       let nextDebts: Debt[] = [];
       let nextCapital: CapitalAsset[] = [];
       let nextBudget: number | null = null;
+      let transactionsLoaded = false;
 
       try {
-        const txPromise = withTimeout(
-          supabase
-            .from('transactions')
-            .select('id,title,amount,category,date,source,kind,note')
-            .is('reconciled_with_id', null)
-            .gte('date', range.start)
-            .lte('date', range.end)
-            .order('date', { ascending: false })
-            .limit(100),
-          15_000,
-          'Сервер не ответил вовремя'
-        ).then((result) => {
-          const { data, error } = result;
-          if (error) {
-            console.warn('Supabase load error', error.message);
-            return;
+        const txPromise = withNetworkRetries(
+          async () => {
+            const result = await withTimeout(
+              client
+                .from('transactions')
+                .select('id,title,amount,category,date,source,kind,note')
+                .is('reconciled_with_id', null)
+                .gte('date', range.start)
+                .lte('date', range.end)
+                .order('date', { ascending: false })
+                .limit(100),
+              15_000,
+              'Сервер не ответил вовремя'
+            );
+            if (result.error) throw result.error;
+            return result.data ?? [];
+          },
+          {
+            attempts: 4,
+            baseDelayMs: 280,
+            onAuthRetry: refreshSessionOnce,
           }
-          if (data) {
-            nextTransactions = mapTransactions(data);
-            setTransactions(nextTransactions);
-          }
+        ).then((data) => {
+          transactionsLoaded = true;
+          nextTransactions = mapTransactions(data);
+          setTransactions(nextTransactions);
         });
 
         const budgetPromise = fetchMonthlyBudget(userId).then((budget) => {
@@ -307,6 +267,12 @@ export function DashboardScreen({ navigation }: Props) {
         });
 
         await Promise.all([txPromise, budgetPromise, subsPromise, debtsPromise, capitalPromise]);
+
+        // Не кэшируем пустой дашборд при сбое сети — иначе нули «залипают» до переустановки.
+        if (!transactionsLoaded) {
+          console.warn('Dashboard transactions not loaded — cache skipped');
+          return;
+        }
 
         // Живые котировки для суммы капитала — в фоне, не блокируем главную.
         void fetchCapitalAssetsValued()
@@ -333,6 +299,7 @@ export function DashboardScreen({ navigation }: Props) {
       } finally {
         clearTimeout(safetyTimer);
         hasLoadedOnceRef.current = true;
+        setIsDashboardReady(true);
         loadInFlightRef.current = false;
       }
     },
@@ -354,6 +321,7 @@ export function DashboardScreen({ navigation }: Props) {
     let cancelled = false;
 
     void (async () => {
+      setIsDashboardReady(false);
       const cached = await readDashboardCache(user.id, selectedMonth);
       if (cancelled) return;
 
@@ -364,6 +332,7 @@ export function DashboardScreen({ navigation }: Props) {
         setCapitalAssets(cached.capitalAssets ?? []);
         setMonthlyBudget(cached.monthlyBudget);
         hasLoadedOnceRef.current = true;
+        setIsDashboardReady(true);
         lastFetchAtRef.current = cached.fetchedAt;
         void loadDashboard();
         return;
@@ -417,6 +386,20 @@ export function DashboardScreen({ navigation }: Props) {
     return () => setOnImportedListener(null);
   }, [loadDashboard, setOnImportedListener]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!isDashboardReady) return;
+      void consumeFirstExpensePrompt(user?.id).then((shouldOpen) => {
+        if (!shouldOpen) return;
+        navigation.navigate('OperationsHub', {
+          month: selectedMonth,
+          initialTransactions: monthExpenses,
+          firstExpenseCue: true,
+        });
+      });
+    }, [isDashboardReady, user?.id, navigation, selectedMonth, monthExpenses])
+  );
+
   const openHistory = (kind: 'income' | 'expense') => {
     const params = {
       month: selectedMonth,
@@ -433,6 +416,34 @@ export function DashboardScreen({ navigation }: Props) {
     navigation
       .getParent<BottomTabNavigationProp<MainTabParamList>>()
       ?.navigate('Finances', { screen: 'Capital' });
+  };
+
+  const handleExportReport = async () => {
+    if (transactions.length === 0 && totalIncome <= 0 && totalExpenses <= 0) {
+      Alert.alert('Нет данных', 'Добавьте операции за месяц — тогда можно сформировать PDF-сводку.');
+      return;
+    }
+    setIsExportingReport(true);
+    try {
+      const result = await exportMonthReportPdf({
+        monthLabel: formatMonthLabel(selectedMonth),
+        income: totalIncome,
+        expenses: totalExpenses,
+        balance,
+        monthlyBudget,
+        transactions,
+      });
+      if (result === 'unavailable') {
+        Alert.alert('Недоступно', 'Поделиться PDF на этом устройстве нельзя.');
+      }
+    } catch (error) {
+      Alert.alert(
+        'Ошибка отчёта',
+        error instanceof Error ? error.message : 'Не удалось создать PDF.'
+      );
+    } finally {
+      setIsExportingReport(false);
+    }
   };
 
   const handleAnalyzeMonth = async () => {
@@ -526,17 +537,10 @@ export function DashboardScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <PendingQuickCaptureHandler onSaved={() => void loadDashboard({ force: true })} />
-      <Modal visible={isAnalyzing} transparent animationType="fade">
-        <View style={styles.analyzeOverlay}>
-          <View style={styles.analyzeOverlayCard}>
-            <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={styles.analyzeOverlayTitle}>Анализируем…</Text>
-            <Text style={styles.analyzeOverlayHint}>
-              {analysisPeriodHint(analysisPeriod)} · обычно 15–40 сек
-            </Text>
-          </View>
-        </View>
-      </Modal>
+      <AnalyzeMonthOverlay
+        visible={isAnalyzing}
+        hint={`${analysisPeriodHint(analysisPeriod)} · обычно 15–40 сек`}
+      />
 
       <ScrollView
         style={styles.container}
@@ -573,8 +577,19 @@ export function DashboardScreen({ navigation }: Props) {
             onImportStatement={openManualImport}
             onOpenCapital={openCapital}
             onOpenImports={() => navigation.navigate('StatementImports')}
+            onExportReport={() => void handleExportReport()}
+            isExportingReport={isExportingReport}
           />
         </FadeSlideIn>
+
+        {isDashboardReady && transactions.length === 0 ? (
+          <FadeSlideIn delay={95}>
+            <DashboardEmptyHint
+              onAddExpense={() => openHistory('expense')}
+              onAddIncome={() => openHistory('income')}
+            />
+          </FadeSlideIn>
+        ) : null}
 
         <FadeSlideIn delay={100} duration={500}>
           <DashboardInsightsSection

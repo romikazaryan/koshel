@@ -28,6 +28,7 @@ import {
   type StatementParseResult,
 } from '../../lib/bankStatementImport';
 import { SegmentedControl } from '../ui/SegmentedControl';
+import { NavyShimmerPressable } from '../ui/NavyShimmerBackground';
 import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
@@ -170,11 +171,8 @@ export function BankStatementImportSheet({
         color: c.textMuted,
       },
       pickBtn: {
-        backgroundColor: c.accent,
         borderRadius: radii.md,
         paddingVertical: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
         minHeight: 48,
       },
       pickBtnText: { color: c.textOnAccent, fontWeight: '700', fontSize: 15 },
@@ -188,12 +186,9 @@ export function BankStatementImportSheet({
       previewMonthsHint: { fontSize: 13, lineHeight: 19, color: c.textMuted, marginTop: 2 },
       warningText: { fontSize: 13, lineHeight: 19, color: c.warning ?? c.textMuted },
       importBtn: {
-        backgroundColor: c.accent,
         borderRadius: radii.md,
         paddingVertical: 14,
-        alignItems: 'center',
         minHeight: 48,
-        justifyContent: 'center',
       },
       importBtnDisabled: { opacity: 0.6 },
       importBtnText: { color: c.textOnAccent, fontWeight: '700', fontSize: 15 },
@@ -443,10 +438,12 @@ export function BankStatementImportSheet({
                 : 'Скачайте выписку в личном кабинете банка (CSV или PDF с текстом, не скан).'}
             </Text>
 
-            <TouchableOpacity
+            <NavyShimmerPressable
               style={styles.pickBtn}
+              contentStyle={{ alignItems: 'center', justifyContent: 'center', minHeight: 48 }}
               onPress={() => void pickFile()}
               disabled={parsing || importing}
+              glow="compact"
             >
               {parsing ? (
                 <View style={{ alignItems: 'center', gap: 4 }}>
@@ -462,7 +459,7 @@ export function BankStatementImportSheet({
                   {preview ? 'Выбрать другой файл' : 'Выбрать CSV или PDF'}
                 </Text>
               )}
-            </TouchableOpacity>
+            </NavyShimmerPressable>
 
             {preview ? (
               <View style={styles.previewCard}>
@@ -548,10 +545,12 @@ export function BankStatementImportSheet({
             ) : null}
 
             {preview ? (
-              <TouchableOpacity
+              <NavyShimmerPressable
                 style={[styles.importBtn, importing && styles.importBtnDisabled]}
+                contentStyle={{ alignItems: 'center', justifyContent: 'center', minHeight: 48 }}
                 onPress={() => void handleImport()}
                 disabled={importing || (importStats?.importCount ?? 0) === 0 || detectedKindMismatch}
+                glow="compact"
               >
                 {importing ? (
                   <ActivityIndicator color={colors.textOnAccent} />
@@ -560,7 +559,7 @@ export function BankStatementImportSheet({
                     Импортировать {importStats?.importCount ?? preview.rows.length} операций
                   </Text>
                 )}
-              </TouchableOpacity>
+              </NavyShimmerPressable>
             ) : null}
 
             <TouchableOpacity style={styles.cancelBtn} onPress={close} disabled={importing}>

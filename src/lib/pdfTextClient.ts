@@ -84,12 +84,12 @@ export async function extractPdfTextFromBase64(
     const page = await document.getPage(pageNum);
     const textContent = await page.getTextContent();
     const items = textContent.items.filter(
-      (item): item is PdfTextItem =>
+      (item) =>
         typeof item === 'object' &&
         item != null &&
         'str' in item &&
         Array.isArray((item as PdfTextItem).transform)
-    );
+    ) as unknown as PdfTextItem[];
     parts.push(...extractPageLines(items));
   }
 

@@ -1,5 +1,9 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Transaction, TransactionKind, TransactionSource } from '../types';
+import { Ionicons } from '@expo/vector-icons';
+import { Transaction, TransactionKind } from '../types';
+import { formatMoney } from '../lib/formatMoney';
+import { useAppTheme } from '../contexts/ThemeContext';
+import { moneyText, spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = {
@@ -21,7 +25,7 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function formatDate(dateStr: string) {
-  const [y, m, d] = dateStr.split('-');
+  const [, m, d] = dateStr.split('-');
   if (!d || !m) return dateStr;
   return `${d}.${m}`;
 }
@@ -48,63 +52,84 @@ export function TransactionList({
   onEdit,
   onRemove,
 }: Props) {
-  const styles = useThemedStyles(({ colors, radii, shadows }) =>
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(({ colors, radii }) =>
     StyleSheet.create({
-      wrap: { marginTop: 8 },
+      wrap: { marginTop: spacing.sm },
       title: {
-        fontSize: 17,
-        fontWeight: '700',
+        ...typography.h3,
         color: colors.text,
-        marginBottom: 12,
+        marginBottom: spacing.md,
       },
       empty: {
-        backgroundColor: colors.surface,
-        borderRadius: radii.lg,
-        padding: 24,
+        backgroundColor: colors.surfaceMuted,
+        borderRadius: radii.xl,
+        padding: spacing.xxl,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: colors.borderLight,
         borderStyle: 'dashed',
+        gap: spacing.sm,
       },
-      emptyTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: 6 },
-      emptyHint: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+      emptyTitle: { ...typography.bodyLg, fontWeight: '700', color: colors.text },
+      emptyHint: { ...typography.meta, color: colors.textMuted, textAlign: 'center' },
       card: {
         flexDirection: 'row',
+        alignItems: 'stretch',
         backgroundColor: colors.surface,
-        borderRadius: radii.md,
-        marginBottom: 10,
+        borderRadius: radii.lg,
+        marginBottom: spacing.sm,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: colors.borderLight,
-        ...shadows.soft,
       },
-      stripe: { width: 4 },
-      stripeIncome: { backgroundColor: colors.income },
-      stripeExpense: { backgroundColor: colors.expense },
-      cardBody: { flex: 1, padding: 14 },
+      accent: { width: 3 },
+      accentIncome: { backgroundColor: colors.income },
+      accentExpense: { backgroundColor: colors.expense },
+      cardBody: { flex: 1, paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
       rowTop: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 8,
-        gap: 12,
+        marginBottom: spacing.sm,
+        gap: spacing.md,
       },
-      itemTitle: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text },
-      amount: { fontSize: 16, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] },
+      itemTitle: { flex: 1, ...typography.bodyLg, color: colors.text, fontWeight: '700' },
+      amount: {
+        ...typography.h3,
+        color: colors.text,
+        ...moneyText,
+      },
       amountIncome: { color: colors.incomeDark },
       rowBottom: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        gap: spacing.sm,
       },
-      meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', flex: 1 },
-      category: { color: colors.textMuted, fontSize: 13 },
-      date: { color: colors.textMuted, fontSize: 13 },
-      source: { color: colors.textSecondary, fontSize: 13, fontWeight: '600' },
-      dot: { color: colors.textMuted, marginHorizontal: 4 },
-      actions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-      edit: { color: colors.incomeDark, fontSize: 13, fontWeight: '700' },
-      remove: { color: colors.danger, fontSize: 13, fontWeight: '600' },
+      meta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', flex: 1, gap: 4 },
+      categoryPill: {
+        ...typography.caption,
+        fontSize: 10,
+        color: colors.textSecondary,
+        backgroundColor: colors.surfaceMuted,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: radii.pill,
+        overflow: 'hidden',
+      },
+      date: { ...typography.caption, color: colors.textMuted },
+      source: { ...typography.caption, color: colors.textMuted },
+      dot: { color: colors.textMuted, fontSize: 10 },
+      actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+      actionBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.surfaceMuted,
+      },
     })
   );
 
@@ -118,25 +143,26 @@ export function TransactionList({
       {showHeading ? <Text style={styles.title}>{meta.title}</Text> : null}
       {transactions.length === 0 ? (
         <View style={styles.empty}>
+          <Ionicons name="receipt-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>{resolvedEmptyTitle}</Text>
           {resolvedEmptyHint ? <Text style={styles.emptyHint}>{resolvedEmptyHint}</Text> : null}
         </View>
       ) : (
         transactions.map((item) => (
           <View key={item.id} style={styles.card}>
-            <View style={[styles.stripe, isIncome ? styles.stripeIncome : styles.stripeExpense]} />
+            <View style={[styles.accent, isIncome ? styles.accentIncome : styles.accentExpense]} />
             <View style={styles.cardBody}>
               <View style={styles.rowTop}>
                 <Text style={styles.itemTitle} numberOfLines={1}>
                   {item.title}
                 </Text>
                 <Text style={[styles.amount, isIncome && styles.amountIncome]}>
-                  {isIncome ? '+' : ''}₽{item.amount.toLocaleString('ru-RU')}
+                  {formatMoney(item.amount, { signed: isIncome })}
                 </Text>
               </View>
               <View style={styles.rowBottom}>
                 <View style={styles.meta}>
-                  <Text style={styles.category}>{item.category}</Text>
+                  <Text style={styles.categoryPill}>{item.category}</Text>
                   <Text style={styles.dot}>·</Text>
                   <Text style={styles.date}>{formatDate(item.date)}</Text>
                   {!isIncome && item.source ? (
@@ -148,13 +174,23 @@ export function TransactionList({
                 </View>
                 <View style={styles.actions}>
                   {onEdit ? (
-                    <TouchableOpacity onPress={() => onEdit(item)} hitSlop={8}>
-                      <Text style={styles.edit}>Изменить</Text>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => onEdit(item)}
+                      hitSlop={4}
+                      accessibilityLabel="Изменить"
+                    >
+                      <Ionicons name="pencil-outline" size={16} color={colors.incomeDark} />
                     </TouchableOpacity>
                   ) : null}
                   {onRemove ? (
-                    <TouchableOpacity onPress={() => onRemove(item.id)} hitSlop={8}>
-                      <Text style={styles.remove}>Удалить</Text>
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => onRemove(item.id)}
+                      hitSlop={4}
+                      accessibilityLabel="Удалить"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
                     </TouchableOpacity>
                   ) : null}
                 </View>

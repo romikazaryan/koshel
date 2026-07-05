@@ -1,5 +1,24 @@
-export function mapAuthErrorMessage(message: string) {
+export function mapAuthErrorMessage(error: unknown) {
+  const message = extractAuthErrorText(error);
   const lower = message.toLowerCase();
+
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('hostname could not be found') ||
+    lower.includes('network request failed') ||
+    lower.includes('enotfound') ||
+    lower.includes('the internet connection appears to be offline')
+  ) {
+    const host = getSupabaseHostLabel();
+    return host
+      ? `Нет связи с сервером (${host}). Проверьте интернет на iPhone (Wi‑Fi или LTE). Откройте этот адрес в Safari — если не открывается, проект Supabase может быть приостановлен или сеть блокирует доступ.`
+      : 'Нет связи с сервером. Проверьте интернет на iPhone и настройки Supabase в .env.';
+  }
+
+  if (lower.includes('network connection was lost') || lower.includes('timed out')) {
+    return 'Сервер не ответил вовремя. Проверьте интернет и попробуйте снова.';
+  }
+
   if (lower.includes('invalid login credentials')) {
     return 'Неверный email или пароль.';
   }
@@ -28,4 +47,38 @@ export function mapAuthErrorMessage(message: string) {
     return 'Слишком много попыток. Подождите минуту и попробуйте снова.';
   }
   return message;
+}
+
+function extractAuthErrorText(error: unknown): string {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    const causeText =
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === 'string'
+          ? cause
+          : '';
+    return [error.message, causeText].filter(Boolean).join(': ');
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: unknown }).message ?? '');
+  }
+  return String(error ?? '');
+}
+
+function getSupabaseHostLabel(): string | null {
+  try {
+    const Constants = require('expo-constants').default as {
+      expoConfig?: { extra?: { SUPABASE_URL?: string } };
+      manifest?: { extra?: { SUPABASE_URL?: string } };
+    };
+    const extra =
+      Constants.expoConfig?.extra ?? (Constants.manifest as { extra?: { SUPABASE_URL?: string } })?.extra;
+    const url = String(extra?.SUPABASE_URL ?? '').trim();
+    if (!url) return null;
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
 }

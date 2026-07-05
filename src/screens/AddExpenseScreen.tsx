@@ -13,23 +13,31 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
+import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
+import { Input } from '../components/ui/Input';
+import { QuickActionTile } from '../components/ui/QuickActionTile';
+import { SectionLabel } from '../components/ui/SectionLabel';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { Category, IncomeCategory, TransactionKind, TransactionSource } from '../types';
 import { hasSupabase, supabase } from '../lib/supabase';
-import { formatTransactionSaveError } from '../lib/apiErrors';
+import { formatTransactionSaveError, getReadableErrorMessage } from '../lib/apiErrors';
 import { TimeoutError, withOneRetry, withTimeout } from '../lib/asyncUtils';
 import { appendTransactionToDashboardCache } from '../lib/dashboardCache';
 import { insertTransaction } from '../lib/transactions';
+import { formatMoney } from '../lib/formatMoney';
 import { parseVoiceLocally } from '../lib/voiceParseFallback';
 import { prepareReceiptImageBase64 } from '../lib/receiptImage';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { moneyText, spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { AutoDismissToast } from '../components/ui/AutoDismissToast';
 
 type AddExpenseScreenProps = {
   lockedKind?: TransactionKind;
   embedded?: boolean;
+  firstExpenseCue?: boolean;
 };
 
 const categories = EXPENSE_CATEGORIES;
@@ -45,7 +53,11 @@ try {
   SpeechRecognitionModule = null;
 }
 
-export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScreenProps = {}) {
+export function AddExpenseScreen({
+  lockedKind,
+  embedded = false,
+  firstExpenseCue = false,
+}: AddExpenseScreenProps = {}) {
   const { user } = useAuth();
   const { colors } = useAppTheme();
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
@@ -81,15 +93,18 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         fontSize: 14,
         color: c.textMuted,
         textAlign: 'center',
+        lineHeight: 20,
       },
       scroll: { flex: 1 },
-      contentContainer: { padding: 20, paddingBottom: 40 },
+      contentContainer: { padding: spacing.xl, paddingBottom: 48 },
       kindToggle: {
         flexDirection: 'row',
         backgroundColor: c.backgroundDeep,
-        borderRadius: radii.md,
+        borderRadius: radii.lg,
         padding: 4,
-        marginBottom: 18,
+        marginBottom: spacing.lg,
+        borderWidth: 1,
+        borderColor: c.borderLight,
       },
       kindOption: {
         flex: 1,
@@ -124,30 +139,67 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         color: c.expenseDark,
       },
       header: {
-        fontSize: 26,
-        fontWeight: '800',
+        ...typography.h1,
         color: c.text,
+        letterSpacing: -0.6,
         marginBottom: 4,
       },
       headerHint: {
-        fontSize: 14,
+        ...typography.body,
         color: c.textMuted,
-        marginBottom: 18,
+        marginBottom: spacing.lg,
+        lineHeight: 21,
       },
-      sectionLabel: { color: c.textSecondary, marginBottom: 10, fontWeight: '600' },
+      kindBanner: {
+        borderRadius: radii.lg,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.lg,
+        marginBottom: spacing.lg,
+        borderWidth: 1,
+      },
+      kindBannerIncome: {
+        backgroundColor: c.incomeSoft,
+        borderColor: c.incomeMuted,
+      },
+      kindBannerExpense: {
+        backgroundColor: c.expenseSoft,
+        borderColor: c.expenseMuted,
+      },
+      kindBannerText: {
+        ...typography.overline,
+        letterSpacing: 1.2,
+      },
+      kindBannerTextIncome: { color: c.incomeDark },
+      kindBannerTextExpense: { color: c.expenseDark },
+      formCard: {
+        backgroundColor: c.surface,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: c.borderLight,
+        padding: spacing.lg,
+        marginBottom: spacing.lg,
+        gap: spacing.md,
+        ...shadows.soft,
+      },
+      chipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+      },
       voiceHint: {
+        ...typography.meta,
         color: c.textMuted,
-        fontSize: 13,
         lineHeight: 19,
-        marginBottom: 14,
+        marginBottom: spacing.md,
+        textAlign: 'center',
       },
       voiceStatusCard: {
         backgroundColor: c.surfaceMuted,
-        borderRadius: radii.md,
-        padding: 14,
-        marginBottom: 16,
+        borderRadius: radii.lg,
+        padding: spacing.lg,
+        marginBottom: spacing.lg,
         borderWidth: 1,
-        borderColor: c.border,
+        borderColor: c.borderLight,
       },
       voiceStatusTitle: {
         color: c.text,
@@ -162,113 +214,94 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         marginBottom: 6,
       },
       voicePreviewText: {
-        color: c.text,
-        fontSize: 17,
+        fontSize: 20,
         fontWeight: '800',
+        color: c.text,
+        ...moneyText,
       },
-      voiceButtonActive: {
-        backgroundColor: c.dangerSoft,
-        borderColor: c.danger,
+      firstExpenseBanner: {
+        backgroundColor: c.accentSoft,
+        borderRadius: radii.lg,
+        borderWidth: 1,
+        borderColor: c.accent,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
       },
-      voiceButtonActiveText: {
-        color: c.danger,
+      firstExpenseTitle: {
+        ...typography.bodyLg,
+        color: c.text,
+        marginBottom: 4,
       },
-      field: {
-        marginBottom: 18,
+      firstExpenseHint: {
+        ...typography.meta,
+        color: c.textMuted,
+        lineHeight: 18,
       },
+      actionsRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+      amountInput: {
+        fontSize: 32,
+        fontWeight: '900',
+        letterSpacing: -0.5,
+        ...moneyText,
+      },
+      field: { marginBottom: spacing.lg },
       label: {
+        ...typography.meta,
         color: c.textSecondary,
-        marginBottom: 8,
-        fontWeight: '600',
+        marginBottom: spacing.sm,
+        fontWeight: '700',
       },
       input: {
-        backgroundColor: c.surface,
+        backgroundColor: c.surfaceMuted,
         borderRadius: radii.md,
         borderWidth: 1,
-        borderColor: c.border,
-        paddingHorizontal: 16,
+        borderColor: c.borderLight,
+        paddingHorizontal: spacing.lg,
         paddingVertical: 14,
         fontSize: 16,
         color: c.text,
-        ...shadows.soft,
       },
-      textArea: {
-        minHeight: 100,
-        textAlignVertical: 'top',
-      },
-      pillRow: {
-        flexWrap: 'wrap',
-        flexDirection: 'row',
-      },
+      textArea: { minHeight: 96, textAlignVertical: 'top' as const },
+      pillRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: spacing.sm },
       categoryPill: {
         borderWidth: 1,
         borderColor: c.border,
         borderRadius: radii.pill,
         paddingVertical: 8,
         paddingHorizontal: 14,
-        marginRight: 10,
-        marginBottom: 8,
         backgroundColor: c.surface,
       },
-      categoryPillActiveIncome: {
-        backgroundColor: c.income,
-        borderColor: c.income,
-      },
-      categoryPillActiveExpense: {
-        backgroundColor: c.expense,
-        borderColor: c.expense,
-      },
-      pillText: {
-        color: c.textSecondary,
-        fontWeight: '600',
-      },
-      pillTextActive: {
-        color: c.textOnAccent,
-      },
-      actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+      categoryPillActiveExpense: { backgroundColor: c.expense, borderColor: c.expense },
+      pillText: { color: c.textSecondary, fontWeight: '600' as const },
+      pillTextActive: { color: c.textOnAccent },
       primaryButton: {
         flex: 1,
         backgroundColor: c.expense,
-        borderRadius: radii.md,
+        borderRadius: radii.lg,
         paddingVertical: 16,
         alignItems: 'center',
-        shadowColor: c.expense,
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 4,
       },
       secondaryButton: {
         flex: 1,
         backgroundColor: c.surface,
-        borderRadius: radii.md,
+        borderRadius: radii.lg,
         paddingVertical: 16,
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: c.border,
+        borderColor: c.borderLight,
       },
-      buttonText: { color: c.textOnAccent, fontWeight: '700' },
-      buttonTextSecondary: { color: c.expenseDark, fontWeight: '700' },
+      buttonText: { color: c.textOnAccent, fontWeight: '700' as const },
+      buttonTextSecondary: { color: c.expenseDark, fontWeight: '700' as const },
       saveButton: {
         borderRadius: radii.lg,
         paddingVertical: 16,
         alignItems: 'center',
-        marginTop: 10,
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 4,
-      },
-      saveButtonIncome: {
-        backgroundColor: c.income,
-        shadowColor: c.income,
-      },
-      saveButtonExpense: {
         backgroundColor: c.expense,
-        shadowColor: c.expense,
       },
-      saveText: {
-        color: c.textOnAccent,
-        fontWeight: '700',
-      },
+      saveText: { color: c.textOnAccent, fontWeight: '700' as const },
+      itemRow: { flexDirection: 'row' as const, gap: spacing.sm, marginBottom: spacing.sm },
+      itemName: { flex: 1 },
+      itemPrice: { width: 110 },
       cameraWrap: { flex: 1, padding: 20, backgroundColor: c.background },
       cameraTitle: { fontSize: 22, fontWeight: '800', marginBottom: 14, color: c.text },
       cameraBox: {
@@ -278,9 +311,6 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         backgroundColor: '#000',
       },
       cameraActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-      itemRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-      itemName: { flex: 1 },
-      itemPrice: { width: 110 },
       totalText: { fontSize: 28, fontWeight: '900', color: c.text, marginTop: 4 },
     })
   );
@@ -469,7 +499,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
           supabase.functions.invoke('voice-to-expense', {
             body: { transcript: phrase },
           }),
-          18_000,
+          12_000,
           'Сервер не ответил вовремя'
         )
         if (error) throw error
@@ -513,14 +543,27 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
         const transcript = typeof event?.results?.[0]?.transcript === 'string' ? event.results[0].transcript : ''
         if (!transcript.trim()) return
 
-        lastTranscriptRef.current = transcript.trim()
-        setLiveTranscript(transcript.trim())
+        const trimmed = transcript.trim()
+        lastTranscriptRef.current = trimmed
+        setLiveTranscript(trimmed)
+
+        const localPreview = parseVoiceLocally(trimmed)
+        if (localPreview) {
+          setVoicePreview(localPreview)
+        }
 
         if (event?.isFinal) {
           if (isParsingTranscriptRef.current) return
           setVoiceStatus('processing')
           speech.stop?.()
-          void handleTranscript(transcript.trim())
+          void handleTranscript(trimmed)
+          return
+        }
+
+        if (localPreview && trimmed.length >= 4 && !isParsingTranscriptRef.current) {
+          setVoiceStatus('processing')
+          speech.stop?.()
+          void handleTranscript(trimmed)
         }
       })
 
@@ -649,13 +692,14 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
       return
     }
     if (!ensureSupabase() || !supabase) return
+    const client = supabase
 
     setIsProcessingAi(true)
     setReceiptStep('photo')
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: false,
-        quality: 0.85,
+        quality: 0.72,
         skipProcessing: true,
       })
 
@@ -669,7 +713,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
 
       setReceiptStep('upload')
       const { data, error } = await withOneRetry(async () =>
-        supabase.functions.invoke('receipt-ocr', {
+        client.functions.invoke('receipt-ocr', {
           body: { imageBase64 },
         })
       )
@@ -742,7 +786,9 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
           <View style={styles.receiptOverlayCard}>
             <ActivityIndicator size="large" color={colors.accent} />
             <Text style={styles.receiptOverlayTitle}>{receiptProgressLabel}</Text>
-            <Text style={styles.receiptOverlayHint}>Обычно 10–30 секунд</Text>
+            <Text style={styles.receiptOverlayHint}>
+              {receiptStep === 'upload' ? 'Обычно 5–15 секунд' : 'Подготовка фото…'}
+            </Text>
           </View>
         </View>
       </Modal>
@@ -809,37 +855,62 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
                   : 'Голос, чек или ручной ввод'}
               </Text>
             </>
+          ) : lockedKind ? (
+            <View
+              style={[
+                styles.kindBanner,
+                entryKind === 'income' ? styles.kindBannerIncome : styles.kindBannerExpense,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.kindBannerText,
+                  entryKind === 'income' ? styles.kindBannerTextIncome : styles.kindBannerTextExpense,
+                ]}
+              >
+                {entryKind === 'income' ? 'Поступление' : 'Расход'}
+              </Text>
+            </View>
+          ) : null}
+
+          {firstExpenseCue ? (
+            <View style={styles.firstExpenseBanner}>
+              <Text style={styles.firstExpenseTitle}>Добавьте первую трату</Text>
+              <Text style={styles.firstExpenseHint}>
+                Назовите сумму голосом, отсканируйте чек или введите вручную — так заработает аналитика на
+                главной.
+              </Text>
+            </View>
           ) : null}
 
           {entryKind === 'expense' ? (
             <>
               <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={[styles.secondaryButton, isListening && styles.voiceButtonActive]}
-                  onPress={toggleVoice}
-                  disabled={!isSpeechAvailable || isProcessingAi}
-                >
-                  <Text style={[styles.buttonTextSecondary, isListening && styles.voiceButtonActiveText]}>
-                    {!isSpeechAvailable
-                      ? 'Голос (недоступно)'
+                <QuickActionTile
+                  icon="mic-outline"
+                  label={
+                    !isSpeechAvailable
+                      ? 'Голос недоступен'
                       : isListening
                         ? 'Стоп'
                         : isProcessingAi
-                          ? 'Обработка...'
-                          : 'Голос'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
+                          ? 'Обработка…'
+                          : 'Голос'
+                  }
+                  onPress={toggleVoice}
+                  active={isListening}
+                  disabled={!isSpeechAvailable || isProcessingAi}
+                />
+                <QuickActionTile
+                  icon="scan-outline"
+                  label="Скан чека"
                   onPress={startCameraFlow}
                   disabled={isProcessingAi || isListening}
-                >
-                  <Text style={styles.buttonTextSecondary}>Скан чека</Text>
-                </TouchableOpacity>
+                />
               </View>
 
               <Text style={styles.voiceHint}>
-                Скажите, например: «кофе 350», «такси 890 рублей», «в Пятёрочке 2 500».
+                Скажите: «кофе 350», «такси 890», «в Пятёрочке 2 500»
               </Text>
             </>
           ) : null}
@@ -858,80 +929,73 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
               {liveTranscript ? <Text style={styles.voiceTranscript}>«{liveTranscript}»</Text> : null}
               {voicePreview ? (
                 <Text style={styles.voicePreviewText}>
-                  ₽{voicePreview.sum.toLocaleString('ru-RU')} · {voicePreview.category}
+                  {formatMoney(voicePreview.sum)} · {voicePreview.category}
                 </Text>
               ) : null}
             </View>
           )}
 
-          <Text style={styles.sectionLabel}>Сумма и категория</Text>
+          <View style={styles.formCard}>
+            <SectionLabel>Сумма и категория</SectionLabel>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Сумма</Text>
-            <TextInput
-              style={styles.input}
+            <Input
+              label="Сумма, ₽"
+              placeholder="0"
               keyboardType="numeric"
-              placeholder="300"
               value={amount}
               onChangeText={setAmount}
+              style={styles.amountInput}
             />
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Категория</Text>
-            <View style={styles.pillRow}>
-              {(entryKind === 'income' ? incomeCategories : categories).map((item) => {
-                const selected =
-                  entryKind === 'income' ? incomeCategory === item : category === item
-                return (
-                  <TouchableOpacity
-                    key={item}
-                    style={[
-                      styles.categoryPill,
-                      selected &&
-                        (entryKind === 'income'
-                          ? styles.categoryPillActiveIncome
-                          : styles.categoryPillActiveExpense),
-                    ]}
-                    onPress={() =>
-                      entryKind === 'income'
-                        ? setIncomeCategory(item as IncomeCategory)
-                        : setCategory(item as Category)
-                    }
-                  >
-                    <Text style={[styles.pillText, selected && styles.pillTextActive]}>{item}</Text>
-                  </TouchableOpacity>
-                )
-              })}
+            <View>
+              <Text style={styles.label}>Категория</Text>
+              <View style={styles.chipRow}>
+                {(entryKind === 'income' ? incomeCategories : categories).map((item) => {
+                  const selected =
+                    entryKind === 'income' ? incomeCategory === item : category === item;
+                  return (
+                    <Chip
+                      key={item}
+                      label={item}
+                      active={selected}
+                      variant={entryKind === 'income' ? 'income' : 'expense'}
+                      onPress={() =>
+                        entryKind === 'income'
+                          ? setIncomeCategory(item as IncomeCategory)
+                          : setCategory(item as Category)
+                      }
+                    />
+                  );
+                })}
+              </View>
             </View>
-          </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>{entryKind === 'income' ? 'Описание' : 'Заметка'}</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
+            <Input
+              label={entryKind === 'income' ? 'Описание' : 'Заметка'}
               placeholder={
                 entryKind === 'income' ? 'Например, зарплата за май' : 'Например, обед с коллегами'
               }
               value={note}
               onChangeText={setNote}
               multiline
+              style={styles.textArea}
               onFocus={scrollFocusedFieldIntoView}
             />
           </View>
 
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              entryKind === 'income' ? styles.saveButtonIncome : styles.saveButtonExpense,
-            ]}
+          <Button
+            label={
+              isSaving
+                ? 'Сохраняю…'
+                : entryKind === 'income'
+                  ? 'Сохранить доход'
+                  : 'Сохранить расход'
+            }
+            variant={entryKind === 'income' ? 'income' : 'expense'}
             onPress={() => void handleSave()}
+            loading={isSaving}
             disabled={isSaving || isProcessingAi}
-          >
-            <Text style={styles.saveText}>
-              {isSaving ? 'Сохраняю...' : entryKind === 'income' ? 'Сохранить доход' : 'Сохранить расход'}
-            </Text>
-          </TouchableOpacity>
+          />
         </KeyboardAwareScrollView>
       )}
 
@@ -1001,7 +1065,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
               {categories.map((item) => (
                 <TouchableOpacity
                   key={item}
-                  style={[styles.categoryPill, receiptCategory === item && styles.categoryPillActive]}
+                  style={[styles.categoryPill, receiptCategory === item && styles.categoryPillActiveExpense]}
                   onPress={() => setReceiptCategory(item)}
                 >
                   <Text style={[styles.pillText, receiptCategory === item && styles.pillTextActive]}>{item}</Text>
@@ -1012,7 +1076,7 @@ export function AddExpenseScreen({ lockedKind, embedded = false }: AddExpenseScr
 
           <View style={styles.field}>
             <Text style={styles.label}>Итого</Text>
-            <Text style={styles.totalText}>₽{receiptTotal.toLocaleString('ru-RU')}</Text>
+            <Text style={styles.totalText}>{formatMoney(receiptTotal)}</Text>
           </View>
 
           <View style={styles.field}>

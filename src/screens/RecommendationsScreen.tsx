@@ -1,9 +1,16 @@
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { FadeSlideIn } from '../components/animations/FadeSlideIn';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { SectionLabel } from '../components/ui/SectionLabel';
+import { NavyHeroBlock } from '../components/ui/NavyHeroBlock';
 import type { HomeStackParamList } from '../navigation/types';
 import type { MonthAnalysisOptimization, MonthAnalysisResult } from '../types/monthAnalysis';
+import { heroOnDark, LUXURY_GOLD } from '../theme/premium';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Recommendations'>;
@@ -61,62 +68,63 @@ function createStyles({ colors: c, cardBase, radii }: Parameters<Parameters<type
   return StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: 'transparent' },
     container: { flex: 1 },
-    contentContainer: { padding: 20, paddingBottom: 40 },
-    backButton: { marginBottom: 12 },
-    backText: { color: c.accentDark, fontWeight: '600', fontSize: 16 },
-    headerWrap: { marginBottom: 18 },
-    title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 6 },
-    subtitle: { color: c.textMuted, fontSize: 14, lineHeight: 20 },
-    headlineCard: {
-      ...cardBase,
-      padding: 20,
-      marginBottom: 14,
-      borderLeftWidth: 4,
-      borderLeftColor: c.accent,
+    contentContainer: { paddingBottom: spacing.xl },
+    heroInner: {
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.lg,
     },
-    headline: { fontSize: 20, fontWeight: '800', color: c.text, lineHeight: 28 },
+    heroEyebrow: {
+      ...typography.overline,
+      color: heroOnDark.eyebrow,
+      letterSpacing: 1.2,
+      marginBottom: spacing.sm,
+    },
+    heroHeadline: {
+      ...typography.h2,
+      color: heroOnDark.title,
+      lineHeight: 30,
+    },
+    body: {
+      paddingHorizontal: spacing.xl,
+      paddingTop: spacing.lg,
+    },
     situation: {
-      fontSize: 15,
-      lineHeight: 23,
+      ...typography.body,
+      lineHeight: 24,
       color: c.textSecondary,
-      marginBottom: 18,
-    },
-    sectionTitle: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: c.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      marginBottom: 10,
+      marginBottom: spacing.lg,
     },
     sectionHint: {
-      fontSize: 13,
-      lineHeight: 19,
+      ...typography.body,
       color: c.textMuted,
-      marginBottom: 12,
-      marginTop: -4,
+      lineHeight: 21,
+      marginBottom: spacing.md,
+      marginTop: -spacing.xs,
     },
     priorityCard: {
       ...cardBase,
       flexDirection: 'row',
-      padding: 16,
-      marginBottom: 10,
-      gap: 12,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      borderRadius: radii.xl,
+      borderWidth: 1,
+      borderColor: c.borderLight,
     },
     priorityIndex: {
-      width: 28,
-      height: 28,
+      width: 32,
+      height: 32,
       borderRadius: radii.pill,
       backgroundColor: c.accentSoft,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    priorityIndexText: { color: c.accentDark, fontWeight: '800', fontSize: 14 },
+    priorityIndexText: { color: c.accentDark, fontWeight: '800', fontSize: 15 },
     priorityBody: { flex: 1 },
-    priorityTitle: { fontSize: 16, fontWeight: '800', color: c.text, marginBottom: 6 },
-    priorityAction: { fontSize: 15, lineHeight: 22, color: c.textSecondary },
+    priorityTitle: { ...typography.h3, fontSize: 17, marginBottom: 6 },
+    priorityAction: { ...typography.body, color: c.textSecondary, lineHeight: 22 },
     priorityEffect: {
-      marginTop: 8,
+      marginTop: spacing.sm,
       fontSize: 14,
       lineHeight: 20,
       color: c.incomeDark,
@@ -124,10 +132,11 @@ function createStyles({ colors: c, cardBase, radii }: Parameters<Parameters<type
     },
     optimizationCard: {
       ...cardBase,
-      padding: 16,
-      marginBottom: 10,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      borderRadius: radii.xl,
       borderLeftWidth: 3,
-      borderLeftColor: c.income,
+      borderLeftColor: LUXURY_GOLD,
     },
     optimizationBadge: {
       alignSelf: 'flex-start',
@@ -135,7 +144,7 @@ function createStyles({ colors: c, cardBase, radii }: Parameters<Parameters<type
       borderRadius: radii.pill,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      marginBottom: 8,
+      marginBottom: spacing.sm,
     },
     optimizationBadgeText: {
       fontSize: 11,
@@ -144,47 +153,56 @@ function createStyles({ colors: c, cardBase, radii }: Parameters<Parameters<type
       textTransform: 'uppercase',
       letterSpacing: 0.4,
     },
-    optimizationTitle: { fontSize: 16, fontWeight: '800', color: c.text, marginBottom: 6 },
-    optimizationAction: { fontSize: 15, lineHeight: 22, color: c.textSecondary },
+    optimizationTitle: { ...typography.h3, fontSize: 17, marginBottom: 6 },
+    optimizationAction: { ...typography.body, color: c.textSecondary, lineHeight: 22 },
     optimizationBenefit: {
-      marginTop: 8,
+      marginTop: spacing.sm,
       fontSize: 14,
       lineHeight: 20,
       color: c.incomeDark,
       fontWeight: '600',
     },
     disclaimer: {
-      marginTop: 14,
-      fontSize: 12,
+      marginTop: spacing.md,
+      ...typography.meta,
       lineHeight: 18,
       color: c.textMuted,
     },
-    insightRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+    insightRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
     insightCard: {
       flex: 1,
       ...cardBase,
-      padding: 14,
-      marginBottom: 0,
+      padding: spacing.md,
+      borderRadius: radii.lg,
     },
     insightLabel: {
-      fontSize: 11,
-      fontWeight: '700',
+      ...typography.overline,
       color: c.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
       marginBottom: 6,
     },
-    insightText: { fontSize: 14, lineHeight: 20, color: c.textSecondary },
+    insightText: { ...typography.body, color: c.textSecondary, lineHeight: 20 },
     watchCard: { borderLeftWidth: 3, borderLeftColor: c.warning },
     strengthCard: { borderLeftWidth: 3, borderLeftColor: c.income },
     legacyCard: {
-      backgroundColor: c.surface,
-      borderRadius: 18,
-      padding: 18,
-      borderWidth: 1,
-      borderColor: c.border,
+      ...cardBase,
+      padding: spacing.lg,
+      borderRadius: radii.xl,
     },
-    legacyText: { color: c.text, fontSize: 15, lineHeight: 24 },
+    legacyText: { ...typography.body, lineHeight: 24, color: c.text },
+    legacyIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      marginBottom: spacing.md,
+    },
+    legacyIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surfaceMuted,
+    },
   });
 }
 
@@ -200,67 +218,83 @@ export function RecommendationsScreen(_props: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Назад</Text>
-        </TouchableOpacity>
+      <ScreenHeader
+        onBack={() => navigation.goBack()}
+        backLabel="Главная"
+        title="Финансовый разбор"
+        subtitle={
+          monthLabel
+            ? `${monthLabel} · персональные рекомендации`
+            : 'Конкретные шаги по вашим тратам'
+        }
+      />
 
-        <View style={styles.headerWrap}>
-          <Text style={styles.title}>Финансовый разбор</Text>
-          <Text style={styles.subtitle}>
-            {monthLabel
-              ? `${monthLabel} · персональные рекомендации`
-              : 'Конкретные шаги по вашим тратам'}
-          </Text>
-        </View>
-
-        {analysis ? (
-          <>
-            <View style={styles.headlineCard}>
-              <Text style={styles.headline}>{analysis.headline}</Text>
+      {analysis ? (
+        <NavyHeroBlock>
+          <View style={styles.heroInner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Ionicons name="sparkles" size={16} color={LUXURY_GOLD} />
+              <Text style={styles.heroEyebrow}>AI-разбор месяца</Text>
             </View>
-
-            <Text style={styles.situation}>{analysis.situation}</Text>
-
-            <Text style={styles.sectionTitle}>Что сделать в первую очередь</Text>
-            {analysis.priorities.map((item, index) => (
-              <PriorityCard key={`${item.title}-${index}`} index={index} item={item} styles={styles} />
-            ))}
-
-            {analysis.optimizations.length > 0 ? (
-              <>
-                <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Как сохранить или вернуть</Text>
-                <Text style={styles.sectionHint}>
-                  Вычеты и продукты, которые подходят под ваши цифры — без советов по отдельным бумагам.
-                </Text>
-                {analysis.optimizations.map((item, index) => (
-                  <OptimizationCard key={`${item.title}-${index}`} item={item} styles={styles} />
-                ))}
-                <Text style={styles.disclaimer}>
-                  Не является индивидуальной финансовой или налоговой консультацией. Перед оформлением
-                  проверьте условия у банка и актуальные лимиты вычетов в ФНС.
-                </Text>
-              </>
-            ) : null}
-
-            <View style={styles.insightRow}>
-              <View style={[styles.insightCard, styles.watchCard]}>
-                <Text style={styles.insightLabel}>На контроле</Text>
-                <Text style={styles.insightText}>{analysis.watch}</Text>
-              </View>
-              <View style={[styles.insightCard, styles.strengthCard]}>
-                <Text style={styles.insightLabel}>Уже хорошо</Text>
-                <Text style={styles.insightText}>{analysis.strength}</Text>
-              </View>
-            </View>
-          </>
-        ) : (
-          <View style={styles.legacyCard}>
-            <Text style={styles.legacyText}>
-              {legacyText || 'Здесь появятся рекомендации после анализа.'}
-            </Text>
+            <Text style={styles.heroHeadline}>{analysis.headline}</Text>
           </View>
-        )}
+        </NavyHeroBlock>
+      ) : null}
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <View style={styles.body}>
+          {analysis ? (
+            <FadeSlideIn>
+              <Text style={styles.situation}>{analysis.situation}</Text>
+
+              <SectionLabel>Что сделать в первую очередь</SectionLabel>
+              {analysis.priorities.map((item, index) => (
+                <PriorityCard key={`${item.title}-${index}`} index={index} item={item} styles={styles} />
+              ))}
+
+              {analysis.optimizations.length > 0 ? (
+                <>
+                  <SectionLabel style={{ marginTop: spacing.md }}>
+                    Как сохранить или вернуть
+                  </SectionLabel>
+                  <Text style={styles.sectionHint}>
+                    Вычеты и продукты под ваши цифры — без советов по отдельным бумагам.
+                  </Text>
+                  {analysis.optimizations.map((item, index) => (
+                    <OptimizationCard key={`${item.title}-${index}`} item={item} styles={styles} />
+                  ))}
+                  <Text style={styles.disclaimer}>
+                    Не является индивидуальной финансовой или налоговой консультацией. Перед
+                    оформлением проверьте условия у банка и актуальные лимиты вычетов в ФНС.
+                  </Text>
+                </>
+              ) : null}
+
+              <View style={styles.insightRow}>
+                <View style={[styles.insightCard, styles.watchCard]}>
+                  <Text style={styles.insightLabel}>На контроле</Text>
+                  <Text style={styles.insightText}>{analysis.watch}</Text>
+                </View>
+                <View style={[styles.insightCard, styles.strengthCard]}>
+                  <Text style={styles.insightLabel}>Уже хорошо</Text>
+                  <Text style={styles.insightText}>{analysis.strength}</Text>
+                </View>
+              </View>
+            </FadeSlideIn>
+          ) : (
+            <View style={styles.legacyCard}>
+              <View style={styles.legacyIconRow}>
+                <View style={styles.legacyIcon}>
+                  <Ionicons name="bulb-outline" size={22} color={LUXURY_GOLD} />
+                </View>
+                <Text style={styles.priorityTitle}>Рекомендации появятся после анализа</Text>
+              </View>
+              <Text style={styles.legacyText}>
+                {legacyText || 'На главной нажмите «Разбор месяца» — AI предложит конкретные шаги.'}
+              </Text>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

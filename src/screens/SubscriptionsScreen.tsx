@@ -1,18 +1,16 @@
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Chip } from '../components/ui/Chip';
 import { Input } from '../components/ui/Input';
+import { SectionLabel } from '../components/ui/SectionLabel';
+import { RecurringPaymentsHero } from '../components/operations/RecurringPaymentsHero';
 import { EXPENSE_CATEGORIES } from '../constants/categories';
+import { formatMoney } from '../lib/formatMoney';
 import {
   deleteSubscription,
   fetchSubscriptions,
@@ -21,9 +19,9 @@ import {
 } from '../lib/subscriptions';
 import { PaymentDayCarouselPicker } from '../components/PaymentDayCarouselPicker';
 import { isValidPaymentDay, paymentDayHint } from '../lib/paymentDay';
-import type { ProfileStackParamList } from '../navigation/types';
 import type { Category, Subscription } from '../types';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type SubscriptionsScreenProps = {
@@ -39,70 +37,41 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
   const [category, setCategory] = useState<Category>('Развлечения');
   const [isSaving, setIsSaving] = useState(false);
 
-  const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
+  const styles = useThemedStyles(({ colors: c, radii }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      backButton: { marginBottom: 8 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
-      subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 20, lineHeight: 21 },
-      card: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: c.borderLight,
-        ...shadows.soft,
-      },
-      cardLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        marginBottom: 10,
-      },
-      categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-      chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: c.border,
-        backgroundColor: c.backgroundDeep,
-      },
-      chipActive: { backgroundColor: c.accentSoft, borderColor: c.accent },
-      chipText: { fontSize: 13, fontWeight: '600', color: c.textMuted },
-      chipTextActive: { color: c.accentDark },
+      content: { paddingHorizontal: spacing.xl, paddingBottom: 40 },
+      title: { ...typography.h1, marginBottom: spacing.xs },
+      subtitle: { ...typography.body, color: c.textMuted, marginBottom: spacing.lg, lineHeight: 21 },
+      cardBlock: { marginBottom: spacing.sm, padding: spacing.md },
+      categories: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
       itemRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
+        gap: spacing.md,
       },
       itemMain: { flex: 1 },
-      itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 4 },
-      itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text, fontVariant: ['tabular-nums'] },
-      itemActions: { alignItems: 'flex-end', gap: 8 },
+      itemName: { ...typography.bodyLg, color: c.text, marginBottom: 4 },
+      itemMeta: { ...typography.meta, color: c.textMuted, lineHeight: 18 },
+      itemAmount: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: c.text,
+        fontVariant: ['tabular-nums'],
+      },
+      itemActions: { alignItems: 'flex-end', gap: spacing.sm },
       deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600' },
       empty: {
-        padding: 20,
+        padding: spacing.lg,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: c.border,
         borderStyle: 'dashed',
         borderRadius: radii.lg,
+        backgroundColor: c.surfaceMuted,
       },
-      emptyText: { color: c.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-      totalLine: {
-        marginTop: 4,
-        fontSize: 14,
-        fontWeight: '600',
-        color: c.accentDark,
-      },
+      emptyText: { ...typography.body, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
     })
   );
 
@@ -188,10 +157,10 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
     ]);
   };
 
-  const Root = embedded ? View : SafeAreaView
+  const Root = embedded ? View : SafeAreaView;
   const rootProps = embedded
     ? { style: { flex: 1 } }
-    : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const }
+    : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const };
 
   return (
     <Root {...rootProps}>
@@ -208,16 +177,28 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
           </>
         ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Добавить подписку</Text>
+        <RecurringPaymentsHero
+          eyebrow="Подписки в месяц"
+          total={activeTotal}
+          empty={activeTotal <= 0}
+          icon="repeat-outline"
+          hint={
+            activeTotal > 0
+              ? `${items.filter((i) => i.isActive).length} активных сервисов`
+              : 'Добавьте Netflix, iCloud или другой сервис'
+          }
+        />
+
+        <SectionLabel>Новая подписка</SectionLabel>
+        <Card style={styles.cardBlock} variant="flat">
           <Input
-            containerStyle={{ marginBottom: 10 }}
+            containerStyle={{ marginBottom: spacing.sm }}
             placeholder="Название (Netflix, Spotify…)"
             value={name}
             onChangeText={setName}
           />
           <Input
-            containerStyle={{ marginBottom: 10 }}
+            containerStyle={{ marginBottom: spacing.sm }}
             placeholder="Сумма ₽/мес"
             keyboardType="numeric"
             value={amount}
@@ -230,15 +211,13 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
           />
           <View style={styles.categories}>
             {EXPENSE_CATEGORIES.map((cat) => (
-              <TouchableOpacity
+              <Chip
                 key={cat}
-                style={[styles.chip, category === cat && styles.chipActive]}
+                label={cat}
+                variant="expense"
+                active={category === cat}
                 onPress={() => setCategory(cat)}
-              >
-                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
           <Button
@@ -246,22 +225,16 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
             onPress={() => void handleAdd()}
             loading={isSaving}
           />
-        </View>
+        </Card>
 
-        <Text style={styles.cardLabel}>Ваши подписки</Text>
-        {activeTotal > 0 ? (
-          <Text style={styles.totalLine}>
-            Активные: ₽{activeTotal.toLocaleString('ru-RU')} / мес
-          </Text>
-        ) : null}
-
+        <SectionLabel>Ваши подписки</SectionLabel>
         {items.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>Пока нет подписок. Добавьте первую выше.</Text>
           </View>
         ) : (
           items.map((item) => (
-            <View key={item.id} style={styles.card}>
+            <Card key={item.id} style={styles.cardBlock} variant="flat">
               <View style={styles.itemRow}>
                 <View style={styles.itemMain}>
                   <Text style={styles.itemName}>{item.name}</Text>
@@ -269,10 +242,10 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
                     {item.category} · списание {item.billingDay}-го
                   </Text>
                 </View>
-                <Text style={styles.itemAmount}>₽{item.amount.toLocaleString('ru-RU')}</Text>
+                <Text style={styles.itemAmount}>{formatMoney(item.amount)}</Text>
               </View>
-              <View style={[styles.itemRow, { marginTop: 12 }]}>
-                <Text style={styles.itemMeta}>{item.isActive ? 'Учитывается в расходах' : 'На паузе'}</Text>
+              <View style={[styles.itemRow, { marginTop: spacing.md }]}>
+                <Text style={styles.itemMeta}>{item.isActive ? 'В плане платежей' : 'На паузе'}</Text>
                 <View style={styles.itemActions}>
                   <Switch
                     value={item.isActive}
@@ -285,7 +258,7 @@ export function SubscriptionsScreen({ embedded = false }: SubscriptionsScreenPro
                   </TouchableOpacity>
                 </View>
               </View>
-            </View>
+            </Card>
           ))
         )}
       </KeyboardAwareScrollView>

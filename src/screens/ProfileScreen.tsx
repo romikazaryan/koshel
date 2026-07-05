@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,10 +8,14 @@ import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollVie
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { ProfileAccountCard } from '../components/profile/ProfileAccountCard';
+import { ProfileMenuRow } from '../components/profile/ProfileMenuRow';
+import { SectionLabel } from '../components/ui/SectionLabel';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme, type ThemePreference } from '../contexts/ThemeContext';
 import { fetchMonthlyBudget, saveMonthlyBudget } from '../lib/userSettings';
 import type { ProfileStackParamList } from '../navigation/types';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileMain'>;
@@ -23,93 +27,40 @@ export function ProfileScreen({ navigation }: Props) {
   const [budgetInput, setBudgetInput] = useState('');
   const [isSavingBudget, setIsSavingBudget] = useState(false);
 
-  const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
+  const accountLabel = user?.email ?? user?.phone ?? 'Аккаунт';
+
+  const styles = useThemedStyles(({ colors: c, radii, shadows, cardBase }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
-      subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 24 },
+      content: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
+      pageTitle: {
+        ...typography.h1,
+        marginTop: spacing.sm,
+        marginBottom: spacing.xs,
+      },
+      pageSubtitle: {
+        ...typography.body,
+        color: c.textMuted,
+        marginBottom: spacing.lg,
+      },
       card: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 18,
-        marginBottom: 12,
+        ...cardBase,
+        borderRadius: radii.xl,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
         borderWidth: 1,
         borderColor: c.borderLight,
         ...shadows.soft,
-      },
-      cardLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        marginBottom: 8,
       },
       cardHint: {
-        fontSize: 14,
+        ...typography.body,
+        color: c.textMuted,
         lineHeight: 20,
+        marginBottom: spacing.md,
+      },
+      versionText: {
+        ...typography.body,
         color: c.textMuted,
-        marginBottom: 14,
-      },
-      cardValue: { fontSize: 17, fontWeight: '600', color: c.text },
-      cardValueMuted: { fontSize: 15, color: c.textMuted },
-      input: {
-        borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 17,
-        color: c.text,
-        marginBottom: 12,
-        backgroundColor: c.backgroundDeep,
-      },
-      saveButton: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginBottom: 10,
-      },
-      saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      buttonDisabled: { opacity: 0.6 },
-      clearLink: {
-        textAlign: 'center',
-        color: c.textMuted,
-        fontSize: 14,
-        fontWeight: '600',
-      },
-      signOutButton: {
-        marginTop: 16,
-        backgroundColor: c.surface,
-        borderWidth: 1,
-        borderColor: c.dangerSoft,
-        borderRadius: 16,
-        paddingVertical: 16,
-        alignItems: 'center',
-      },
-      signOutText: { color: c.danger, fontWeight: '700', fontSize: 16 },
-      menuCard: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 18,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: c.borderLight,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        ...shadows.soft,
-      },
-      menuTitle: { fontSize: 17, fontWeight: '700', color: c.text, marginBottom: 4 },
-      menuHint: { fontSize: 13, color: c.textMuted, lineHeight: 18, flex: 1, paddingRight: 12 },
-      menuArrow: { fontSize: 22, color: c.accentDark, fontWeight: '600' },
-      themeHint: {
-        fontSize: 14,
-        color: c.textMuted,
-        marginBottom: 12,
-        lineHeight: 20,
       },
     })
   );
@@ -198,14 +149,14 @@ export function ProfileScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content} keyboardBottomPadding={48} avoidKeyboard={false}>
-        <Text style={styles.title}>Профиль</Text>
-        <Text style={styles.subtitle}>Аккаунт и настройки приложения</Text>
+        <Text style={styles.pageTitle}>Профиль</Text>
+        <Text style={styles.pageSubtitle}>Аккаунт и настройки</Text>
 
+        <ProfileAccountCard accountLabel={accountLabel} />
+
+        <SectionLabel>Оформление</SectionLabel>
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Тема оформления</Text>
-          <Text style={styles.themeHint}>
-            «Авто» следует настройкам iPhone (светлая / тёмная).
-          </Text>
+          <Text style={styles.cardHint}>«Авто» следует настройкам iPhone (светлая / тёмная).</Text>
           <SegmentedControl<ThemePreference>
             options={[
               { value: 'system', label: 'Авто' },
@@ -218,15 +169,10 @@ export function ProfileScreen({ navigation }: Props) {
           />
         </View>
 
+        <SectionLabel>Лимит трат</SectionLabel>
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Вы вошли как</Text>
-          <Text style={styles.cardValue}>{user?.email ?? user?.phone ?? '—'}</Text>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Лимит трат на месяц</Text>
           <Text style={styles.cardHint}>
-            Сколько вы планируете потратить за месяц. На главной покажем прогресс по расходам.
+            План расходов на месяц — на главной покажем прогресс.
           </Text>
           <Input
             containerStyle={{ marginBottom: 12 }}
@@ -253,30 +199,38 @@ export function ProfileScreen({ navigation }: Props) {
           ) : null}
         </View>
 
-        <TouchableOpacity
-          style={styles.menuCard}
-          onPress={() => navigation.navigate('BankConnections')}
-          activeOpacity={0.85}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.menuTitle}>Банки и подключения</Text>
-            <Text style={styles.menuHint}>
-              T-Invest, Open Finance. Выписки банков — в разделе «Операции» на главной
-            </Text>
-          </View>
-          <Text style={styles.menuArrow}>›</Text>
-        </TouchableOpacity>
+        <SectionLabel>Обучение</SectionLabel>
+        <ProfileMenuRow
+          icon="map-outline"
+          title="Тур по приложению"
+          hint="Короткий обзор главных разделов"
+          onPress={() => navigation.navigate('AppTour')}
+        />
+        <ProfileMenuRow
+          icon="clipboard-outline"
+          title="Стартовый опрос"
+          hint="Доход, лимит, подушка и цели"
+          onPress={() => navigation.navigate('Onboarding')}
+        />
 
+        <SectionLabel>Подключения</SectionLabel>
+        <ProfileMenuRow
+          icon="link-outline"
+          title="Банки и брокеры"
+          hint="T-Invest, выписки, Open Finance"
+          onPress={() => navigation.navigate('BankConnections')}
+        />
+
+        <SectionLabel>Система</SectionLabel>
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Версия</Text>
-          <Text style={styles.cardValueMuted}>koshel {appVersion}</Text>
+          <Text style={styles.versionText}>koshel {appVersion}</Text>
         </View>
 
         <Button
           label="Выйти из аккаунта"
           variant="danger"
           onPress={handleSignOut}
-          style={{ marginTop: 16 }}
+          style={{ marginTop: spacing.md }}
         />
       </KeyboardAwareScrollView>
     </SafeAreaView>

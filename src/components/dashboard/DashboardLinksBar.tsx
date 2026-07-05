@@ -2,16 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
+import { formatMoney } from '../../lib/formatMoney';
 
 type Props = {
   capitalTotal: number;
   onImportStatement: () => void;
   onOpenCapital: () => void;
   onOpenImports: () => void;
+  onExportReport?: () => void;
+  isExportingReport?: boolean;
 };
 
 const ACTIONS = [
   { key: 'import', icon: 'document-text-outline', label: 'Выписка', hint: 'CSV · PDF' },
+  { key: 'report', icon: 'document-outline', label: 'Отчёт', hint: 'PDF' },
   { key: 'capital', icon: 'trending-up-outline', label: 'Капитал', hint: 'активы' },
   { key: 'imports', icon: 'time-outline', label: 'Импорты', hint: 'история' },
 ] as const;
@@ -21,6 +25,8 @@ export function DashboardLinksBar({
   onImportStatement,
   onOpenCapital,
   onOpenImports,
+  onExportReport,
+  isExportingReport = false,
 }: Props) {
   const { colors } = useAppTheme();
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
@@ -74,6 +80,7 @@ export function DashboardLinksBar({
 
   const handlers = {
     import: onImportStatement,
+    report: onExportReport ?? (() => undefined),
     capital: onOpenCapital,
     imports: onOpenImports,
   };
@@ -86,6 +93,7 @@ export function DashboardLinksBar({
           style={styles.tile}
           onPress={handlers[action.key]}
           activeOpacity={0.8}
+          disabled={action.key === 'report' && isExportingReport}
           accessibilityRole="button"
           accessibilityLabel={action.label}
         >
@@ -94,7 +102,9 @@ export function DashboardLinksBar({
           </View>
           <Text style={styles.label}>{action.label}</Text>
           {action.key === 'capital' ? (
-            <Text style={styles.capitalValue}>₽{capitalTotal.toLocaleString('ru-RU')}</Text>
+            <Text style={styles.capitalValue}>{formatMoney(capitalTotal)}</Text>
+          ) : action.key === 'report' ? (
+            <Text style={styles.hint}>{isExportingReport ? '…' : action.hint}</Text>
           ) : (
             <Text style={styles.hint}>{action.hint}</Text>
           )}

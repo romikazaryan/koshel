@@ -4,10 +4,12 @@ import type { MonthAnalysisResult } from '../types/monthAnalysis';
 import type { Transaction, TransactionKind } from '../types';
 
 export type HomeStackParamList = {
-  Dashboard: undefined;
+  Dashboard: { openImport?: boolean } | undefined;
   OperationsHub: {
     month: MonthRef;
     initialTransactions?: Transaction[];
+    initialSegment?: 'expenses' | 'debts' | 'subscriptions';
+    firstExpenseCue?: boolean;
   };
   IncomeMain: {
     month: MonthRef;
@@ -35,6 +37,8 @@ export type ProfileStackParamList = {
   ProfileMain: undefined;
   BankConnections: undefined;
   TinvestConnect: undefined;
+  Onboarding: undefined;
+  AppTour: undefined;
 };
 
 export type MainTabParamList = {

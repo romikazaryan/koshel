@@ -4,9 +4,9 @@ import * as ImageManipulator from 'expo-image-manipulator';
 export async function prepareReceiptImageBase64(imageUri: string): Promise<string> {
   const result = await ImageManipulator.manipulateAsync(
     imageUri,
-    [{ resize: { width: 1280 } }],
+    [{ resize: { width: 960 } }],
     {
-      compress: 0.55,
+      compress: 0.48,
       format: ImageManipulator.SaveFormat.JPEG,
       base64: true,
     }

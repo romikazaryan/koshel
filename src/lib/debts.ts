@@ -143,11 +143,12 @@ export async function setDebtReminders(id: string, remindEnabled: boolean): Prom
 
 export async function deleteDebt(id: string): Promise<void> {
   if (!supabase) throw new Error('Supabase не настроен.');
+  const client = supabase;
 
   await withNetworkRetries(
     async () => {
       const result = await withTimeout(
-        supabase.from('debts').delete().eq('id', id),
+        client.from('debts').delete().eq('id', id),
         MUTATION_TIMEOUT_MS,
         'Сервер не ответил вовремя'
       );

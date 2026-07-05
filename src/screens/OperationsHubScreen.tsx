@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import type { HomeStackParamList } from '../navigation/types';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import { AddExpenseScreen } from './AddExpenseScreen';
 import { DebtsScreen } from './DebtsScreen';
@@ -15,59 +17,50 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'OperationsHub'>;
 
 const SEGMENT_HINTS: Record<OperationsSegment, string> = {
   expenses: 'Голос, чек или ручной ввод — обычные траты',
-  debts: 'Кредиты и долги — платежи учитываются в расходах на главной',
-  subscriptions: 'Netflix, Spotify и другие — списания каждый месяц',
+  debts: 'Кредиты и долги — план обязательных платежей',
+  subscriptions: 'Netflix, Spotify и другие — ежемесячные списания',
 };
 
 export function OperationsHubScreen({ navigation, route }: Props) {
-  const { month, initialTransactions } = route.params;
-  const [segment, setSegment] = useState<OperationsSegment>('expenses');
+  const { month, initialTransactions, initialSegment = 'expenses', firstExpenseCue = false } =
+    route.params;
+  const [segment, setSegment] = useState<OperationsSegment>(initialSegment);
 
   const styles = useThemedStyles(({ colors: c }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
-      topRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 8,
+      segmentWrap: {
+        paddingHorizontal: spacing.xl,
+        paddingBottom: spacing.sm,
       },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      historyLink: { color: c.accentDark, fontSize: 15, fontWeight: '600' },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 4 },
-      hubHint: { fontSize: 14, color: c.textMuted, lineHeight: 20, marginBottom: 12 },
-      segmentHint: { fontSize: 14, color: c.textMuted, lineHeight: 20, marginBottom: 12 },
+      segmentHint: {
+        ...typography.body,
+        color: c.textMuted,
+        lineHeight: 21,
+        marginBottom: spacing.md,
+      },
       body: { flex: 1 },
     })
   );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
-            <Text style={styles.backText}>← Главная</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate('TransactionHistory', {
-                kind: 'expense',
-                month,
-                initialTransactions,
-              })
-            }
-            hitSlop={8}
-          >
-            <Text style={styles.historyLink}>История</Text>
-          </TouchableOpacity>
-        </View>
+      <ScreenHeader
+        onBack={() => navigation.goBack()}
+        backLabel="Главная"
+        title="Расходы"
+        subtitle="Траты, долги и подписки в одном месте"
+        rightLabel="История"
+        onRightPress={() =>
+          navigation.navigate('TransactionHistory', {
+            kind: 'expense',
+            month,
+            initialTransactions,
+          })
+        }
+      />
 
-        <Text style={styles.title}>Операции</Text>
-        <Text style={styles.hubHint}>
-          Ручной ввод трат, долгов и подписок
-        </Text>
-
+      <View style={styles.segmentWrap}>
         <Text style={styles.segmentHint}>{SEGMENT_HINTS[segment]}</Text>
         <SegmentedControl<OperationsSegment>
           options={[
@@ -83,7 +76,7 @@ export function OperationsHubScreen({ navigation, route }: Props) {
 
       <View style={styles.body}>
         {segment === 'expenses' ? (
-          <AddExpenseScreen lockedKind="expense" embedded />
+          <AddExpenseScreen lockedKind="expense" embedded firstExpenseCue={firstExpenseCue} />
         ) : segment === 'debts' ? (
           <DebtsScreen embedded />
         ) : (

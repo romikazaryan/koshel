@@ -9,10 +9,17 @@ import {
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedDonutChart } from '../charts/AnimatedDonutChart';
 import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
+import { NavyHeroBlock } from '../ui/NavyHeroBlock';
+import { SectionLabel } from '../ui/SectionLabel';
+import { formatMoney } from '../../lib/formatMoney';
 import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
+import { heroOnDark, LUXURY_GOLD } from '../../theme/premium';
+import { moneyText, typography } from '../../theme/layout';
+import { useAppTheme } from '../../contexts/ThemeContext';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import type { Category } from '../../types';
 
@@ -31,197 +38,188 @@ type Props = {
 
 export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps } =
     useSwipeDownToClose(visible, onClose, { mode: 'header' });
 
-  const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
+  const styles = useThemedStyles(({ colors: c, radii, shadows, spacing }) =>
     StyleSheet.create({
-      root: {
-        flex: 1,
-      },
-      backdrop: {
-        flex: 1,
-        justifyContent: 'flex-end',
-      },
+      root: { flex: 1 },
+      backdrop: { flex: 1, justifyContent: 'flex-end' },
       sheet: {
         zIndex: 1,
-        maxHeight: '88%',
+        maxHeight: '90%',
         backgroundColor: c.surface,
-        borderTopLeftRadius: radii.xl,
-        borderTopRightRadius: radii.xl,
+        borderTopLeftRadius: radii.xl + 4,
+        borderTopRightRadius: radii.xl + 4,
         overflow: 'hidden',
         ...shadows.card,
       },
       scrollContent: {
-        paddingBottom: Math.max(insets.bottom, 16),
+        paddingBottom: Math.max(insets.bottom, spacing.lg),
       },
-      dragHeader: {
-        backgroundColor: c.surface,
-      },
+      dragHeader: {},
       handleWrap: {
         alignItems: 'center',
-        paddingTop: 8,
-        paddingBottom: 6,
-      },
-      bodyTitleWrap: {
-        paddingHorizontal: 20,
-        paddingTop: 18,
-        paddingBottom: 4,
+        paddingTop: spacing.sm,
+        paddingBottom: spacing.xs,
       },
       dragHandle: {
-        width: 44,
-        height: 5,
-        borderRadius: 3,
-        backgroundColor: 'rgba(255,255,255,0.5)',
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: heroOnDark.handle,
       },
-      hero: {
-        backgroundColor: c.navy,
-        paddingHorizontal: 20,
-        paddingTop: 8,
-        paddingBottom: 20,
+      heroInner: {
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing.xs,
+        paddingBottom: spacing.xl,
       },
       heroTop: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
-        marginBottom: 14,
+        marginBottom: spacing.md,
       },
       heroEyebrow: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: c.textOnDarkMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
+        ...typography.overline,
+        color: heroOnDark.eyebrow,
+        letterSpacing: 1.2,
       },
       closeBtn: {
-        position: 'absolute',
-        top: 16,
-        right: 20,
-        zIndex: 2,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(255,255,255,0.12)',
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: heroOnDark.closeBg,
         alignItems: 'center',
         justifyContent: 'center',
       },
-      closeText: {
-        fontSize: 18,
-        lineHeight: 20,
-        color: c.textOnDark,
-        fontWeight: '600',
-      },
       heroTitle: {
-        fontSize: 24,
-        fontWeight: '900',
-        color: c.textOnDark,
+        ...typography.h1,
+        color: heroOnDark.title,
+        letterSpacing: -0.6,
         marginBottom: 4,
       },
       heroSubtitle: {
-        fontSize: 14,
-        color: c.textOnDarkMuted,
-        marginBottom: 16,
+        ...typography.body,
+        color: heroOnDark.subtitle,
+        marginBottom: spacing.lg,
       },
       heroTotal: {
-        fontSize: 36,
+        fontSize: 38,
         fontWeight: '900',
-        color: c.textOnDark,
-        letterSpacing: -0.5,
+        color: heroOnDark.title,
+        letterSpacing: -1,
+        ...moneyText,
       },
       chartWrap: {
         alignItems: 'center',
-        marginTop: 4,
+        marginTop: spacing.sm,
       },
       body: {
-        paddingHorizontal: 20,
-        paddingTop: 6,
-        paddingBottom: 8,
-      },
-      bodyTitle: {
-        fontSize: 12,
-        fontWeight: '800',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.7,
-        marginBottom: 14,
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing.lg,
       },
       row: {
-        marginBottom: 12,
-        borderRadius: radii.md,
-        overflow: 'hidden',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        marginBottom: spacing.md,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.md,
+        borderRadius: radii.lg,
+        backgroundColor: c.surfaceMuted,
         borderWidth: 1,
         borderColor: c.borderLight,
-        backgroundColor: c.surfaceMuted,
       },
+      rowLeader: {
+        borderColor: LUXURY_GOLD,
+        backgroundColor: c.surface,
+      },
+      rank: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: c.backgroundDeep,
+      },
+      rankLeader: {
+        backgroundColor: 'rgba(217,164,65,0.18)',
+      },
+      rankText: {
+        ...typography.caption,
+        color: c.textMuted,
+        fontWeight: '800',
+      },
+      rankTextLeader: { color: LUXURY_GOLD },
+      rowMain: { flex: 1, minWidth: 0 },
       rowTop: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 12,
-        paddingTop: 10,
-        paddingBottom: 4,
-        zIndex: 1,
+        gap: spacing.sm,
+        marginBottom: spacing.sm,
       },
       rowLabelWrap: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: spacing.sm,
         flex: 1,
       },
       dot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
       },
       rowLabel: {
-        fontSize: 15,
-        fontWeight: '700',
+        ...typography.h3,
         color: c.text,
         flexShrink: 1,
       },
       rowBadge: {
-        fontSize: 10,
-        fontWeight: '800',
-        color: c.accentDark,
-        backgroundColor: c.primarySoft,
+        ...typography.caption,
+        color: LUXURY_GOLD,
+        backgroundColor: 'rgba(217,164,65,0.14)',
         paddingHorizontal: 8,
         paddingVertical: 3,
         borderRadius: radii.pill,
         overflow: 'hidden',
+        fontSize: 10,
       },
       rowAmount: {
-        fontSize: 15,
-        fontWeight: '800',
+        ...typography.h3,
         color: c.text,
+        ...moneyText,
       },
-      rowBarTrack: {
-        height: 36,
+      barTrack: {
+        height: 6,
+        borderRadius: 3,
         backgroundColor: c.backgroundDeep,
-        justifyContent: 'center',
+        overflow: 'hidden',
       },
-      rowBarFill: {
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        bottom: 0,
-        opacity: 0.35,
+      barFill: {
+        height: '100%',
+        borderRadius: 3,
+      },
+      rowMeta: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 6,
       },
       rowPercent: {
-        paddingHorizontal: 12,
-        paddingBottom: 8,
-        fontSize: 12,
-        fontWeight: '600',
+        ...typography.caption,
         color: c.textMuted,
       },
       empty: {
-        paddingVertical: 28,
+        paddingVertical: spacing.xxl * 2,
         alignItems: 'center',
+        gap: spacing.md,
       },
       emptyText: {
-        fontSize: 15,
+        ...typography.bodyLg,
         color: c.textMuted,
         textAlign: 'center',
-        lineHeight: 22,
       },
     })
   );
@@ -243,8 +241,6 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
     [sorted]
   );
 
-  const maxAmount = sorted[0]?.amount ?? 1;
-
   return (
     <Modal
       visible={visible}
@@ -259,81 +255,86 @@ export function SpendingBreakdownSheet({ visible, onClose, monthLabel, items }: 
           <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
             <PanGestureHandler {...panGestureProps}>
               <View style={styles.dragHeader}>
-                <View style={styles.hero}>
+                <NavyHeroBlock>
                   <View style={styles.handleWrap}>
                     <View style={styles.dragHandle} />
                   </View>
-                  <View style={styles.heroTop}>
-                    <Text style={styles.heroEyebrow}>{monthLabel}</Text>
-                    <TouchableOpacity
-                      style={styles.closeBtn}
-                      onPress={close}
-                      accessibilityRole="button"
-                      accessibilityLabel="Закрыть"
-                    >
-                      <Text style={styles.closeText}>×</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.heroTitle}>Куда ушли деньги</Text>
-                  <Text style={styles.heroSubtitle}>Разбивка расходов за месяц</Text>
-                  <Text style={styles.heroTotal}>₽{total.toLocaleString('ru-RU')}</Text>
-                  {slices.length > 0 ? (
-                    <View style={styles.chartWrap} pointerEvents="none">
-                      <AnimatedDonutChart slices={slices} size={200} animateEntrance={false} />
+                  <View style={styles.heroInner}>
+                    <View style={styles.heroTop}>
+                      <Text style={styles.heroEyebrow}>{monthLabel}</Text>
+                      <TouchableOpacity
+                        style={styles.closeBtn}
+                        onPress={close}
+                        accessibilityRole="button"
+                        accessibilityLabel="Закрыть"
+                      >
+                        <Ionicons name="close" size={20} color={heroOnDark.title} />
+                      </TouchableOpacity>
                     </View>
-                  ) : null}
-                </View>
-                {sorted.length > 0 ? (
-                  <View style={styles.bodyTitleWrap}>
-                    <Text style={styles.bodyTitle}>По категориям</Text>
+                    <Text style={styles.heroTitle}>Куда ушли деньги</Text>
+                    <Text style={styles.heroSubtitle}>Разбивка расходов за месяц</Text>
+                    <Text style={styles.heroTotal}>{formatMoney(total)}</Text>
+                    {slices.length > 0 ? (
+                      <View style={styles.chartWrap} pointerEvents="none">
+                        <AnimatedDonutChart slices={slices} size={188} animateEntrance={false} />
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
+                </NavyHeroBlock>
               </View>
             </PanGestureHandler>
 
             <ScrollView
               contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator
+              showsVerticalScrollIndicator={false}
               bounces
               keyboardShouldPersistTaps="handled"
             >
               <View style={styles.body}>
+                {sorted.length > 0 ? <SectionLabel>По категориям</SectionLabel> : null}
                 {sorted.length === 0 ? (
                   <View style={styles.empty}>
+                    <Ionicons name="pie-chart-outline" size={40} color={colors.textMuted} />
                     <Text style={styles.emptyText}>За этот месяц расходов пока нет</Text>
                   </View>
                 ) : (
-                  <>
-                    {sorted.map((item, index) => {
-                      const percent = total > 0 ? Math.round((item.amount / total) * 100) : 0;
-                      const widthPercent = Math.max(8, Math.round((item.amount / maxAmount) * 100));
-                      return (
-                        <View key={item.category} style={styles.row}>
+                  sorted.map((item, index) => {
+                    const percent = total > 0 ? Math.round((item.amount / total) * 100) : 0;
+                    const widthPercent = Math.max(6, percent);
+                    const isLeader = index === 0;
+                    return (
+                      <View key={item.category} style={[styles.row, isLeader && styles.rowLeader]}>
+                        <View style={[styles.rank, isLeader && styles.rankLeader]}>
+                          <Text style={[styles.rankText, isLeader && styles.rankTextLeader]}>
+                            {index + 1}
+                          </Text>
+                        </View>
+                        <View style={styles.rowMain}>
                           <View style={styles.rowTop}>
                             <View style={styles.rowLabelWrap}>
                               <View style={[styles.dot, { backgroundColor: item.color }]} />
                               <Text style={styles.rowLabel} numberOfLines={1}>
                                 {item.category}
                               </Text>
-                              {index === 0 ? <Text style={styles.rowBadge}>лидер</Text> : null}
+                              {isLeader ? <Text style={styles.rowBadge}>лидер</Text> : null}
                             </View>
-                            <Text style={styles.rowAmount}>
-                              ₽{item.amount.toLocaleString('ru-RU')}
-                            </Text>
+                            <Text style={styles.rowAmount}>{formatMoney(item.amount)}</Text>
                           </View>
-                          <View style={styles.rowBarTrack}>
+                          <View style={styles.barTrack}>
                             <View
                               style={[
-                                styles.rowBarFill,
+                                styles.barFill,
                                 { width: `${widthPercent}%`, backgroundColor: item.color },
                               ]}
                             />
                           </View>
-                          <Text style={styles.rowPercent}>{percent}% от всех трат</Text>
+                          <View style={styles.rowMeta}>
+                            <Text style={styles.rowPercent}>{percent}% от всех трат</Text>
+                          </View>
                         </View>
-                      );
-                    })}
-                  </>
+                      </View>
+                    );
+                  })
                 )}
               </View>
             </ScrollView>

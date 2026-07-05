@@ -1,17 +1,13 @@
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { SectionLabel } from '../components/ui/SectionLabel';
+import { RecurringPaymentsHero } from '../components/operations/RecurringPaymentsHero';
 import {
   deleteDebt,
   fetchDebts,
@@ -20,12 +16,13 @@ import {
   setDebtActive,
   setDebtReminders,
 } from '../lib/debts';
+import { formatMoney } from '../lib/formatMoney';
 import { getDefaultDebtEndDate, getPaymentDayFromIsoDate, isValidIsoDate } from '../lib/endDate';
 import { ensureNotificationPermission, rescheduleDebtReminders } from '../lib/debtReminders';
 import { EndDateCarouselPicker } from '../components/EndDateCarouselPicker';
-import type { ProfileStackParamList } from '../navigation/types';
 import type { Debt } from '../types';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type DebtsScreenProps = {
@@ -37,81 +34,60 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
   const [items, setItems] = useState<Debt[]>([]);
   const [name, setName] = useState('');
   const [monthlyPayment, setMonthlyPayment] = useState('');
-  const [paymentDay, setPaymentDay] = useState('1');
   const [endDate, setEndDate] = useState('');
   const [remindEnabled, setRemindEnabled] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
+  const styles = useThemedStyles(({ colors: c, radii }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      backButton: { marginBottom: 8 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, letterSpacing: -0.5, marginBottom: 6 },
-      subtitle: { fontSize: 15, color: c.textMuted, marginBottom: 20, lineHeight: 21 },
-      card: {
-        backgroundColor: c.surface,
-        borderRadius: radii.lg,
-        padding: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: c.borderLight,
-        ...shadows.soft,
-      },
-      cardLabel: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        marginBottom: 10,
-      },
-      row: { flexDirection: 'row', gap: 10 },
-      rowItem: { flex: 1 },
+      content: { paddingHorizontal: spacing.xl, paddingBottom: 40 },
+      title: { ...typography.h1, marginBottom: spacing.xs },
+      subtitle: { ...typography.body, color: c.textMuted, marginBottom: spacing.lg, lineHeight: 21 },
+      cardBlock: { marginBottom: spacing.sm, padding: spacing.md },
       remindRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: spacing.md,
       },
-      remindText: { flex: 1, paddingRight: 12 },
-      remindTitle: { fontSize: 15, fontWeight: '600', color: c.text, marginBottom: 4 },
-      remindHint: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
+      remindText: { flex: 1, paddingRight: spacing.md },
+      remindTitle: { ...typography.bodyLg, color: c.text, marginBottom: 4 },
+      remindHint: { ...typography.meta, color: c.textMuted, lineHeight: 18 },
+      pickerHint: { ...typography.meta, color: c.textMuted, marginBottom: spacing.sm, lineHeight: 18 },
+      itemName: { ...typography.bodyLg, color: c.text, marginBottom: 4 },
+      itemMeta: { ...typography.meta, color: c.textMuted, lineHeight: 18 },
+      itemAmount: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: c.text,
+        fontVariant: ['tabular-nums'],
+      },
       itemRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 12,
+        gap: spacing.md,
       },
       itemMain: { flex: 1 },
-      itemName: { fontSize: 16, fontWeight: '700', color: c.text, marginBottom: 4 },
-      itemMeta: { fontSize: 13, color: c.textMuted, lineHeight: 18 },
-      itemAmount: { fontSize: 17, fontWeight: '800', color: c.text, fontVariant: ['tabular-nums'] },
       switchRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginTop: 10,
+        marginTop: spacing.sm,
       },
-      switchLabel: { fontSize: 13, color: c.textMuted },
-      deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600', marginTop: 10 },
+      switchLabel: { ...typography.meta, color: c.textMuted },
+      deleteLink: { color: c.danger, fontSize: 13, fontWeight: '600', marginTop: spacing.sm },
       empty: {
-        padding: 20,
+        padding: spacing.lg,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: c.border,
         borderStyle: 'dashed',
         borderRadius: radii.lg,
+        backgroundColor: c.surfaceMuted,
       },
-      emptyText: { color: c.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-      totalLine: {
-        marginTop: 4,
-        marginBottom: 10,
-        fontSize: 14,
-        fontWeight: '600',
-        color: c.accentDark,
-      },
+      emptyText: { ...typography.body, color: c.textMuted, textAlign: 'center', lineHeight: 20 },
     })
   );
 
@@ -246,10 +222,10 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
     ]);
   };
 
-  const Root = embedded ? View : SafeAreaView
+  const Root = embedded ? View : SafeAreaView;
   const rootProps = embedded
     ? { style: { flex: 1 } }
-    : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const }
+    : { style: styles.safeArea, edges: ['top', 'left', 'right'] as const };
 
   return (
     <Root {...rootProps}>
@@ -267,24 +243,35 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
           </>
         ) : null}
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Добавить долг</Text>
+        <RecurringPaymentsHero
+          eyebrow="Платежи в месяц"
+          total={activeTotal}
+          empty={activeTotal <= 0}
+          icon="card-outline"
+          hint={
+            activeTotal > 0
+              ? `${items.filter((i) => i.isActive).length} активных долгов`
+              : 'Добавьте кредит или рассрочку — сумма появится в расходах'
+          }
+        />
+
+        <SectionLabel>Новый долг</SectionLabel>
+        <Card style={styles.cardBlock} variant="flat">
           <Input
-            containerStyle={{ marginBottom: 10 }}
+            containerStyle={{ marginBottom: spacing.sm }}
             placeholder="Название (ипотека, кредит…)"
             value={name}
             onChangeText={setName}
           />
           <Input
-            containerStyle={{ marginBottom: 10 }}
+            containerStyle={{ marginBottom: spacing.sm }}
             placeholder="Платёж ₽/мес"
             keyboardType="numeric"
             value={monthlyPayment}
             onChangeText={setMonthlyPayment}
           />
-          <Text style={[styles.cardLabel, { marginTop: 2, marginBottom: 4 }]}>Дата платежа</Text>
-          <Text style={[styles.remindHint, { marginBottom: 8 }]}>
-            Выберите день последнего платежа — в это же число каждый месяц придёт напоминание.
+          <Text style={styles.pickerHint}>
+            День последнего платежа — в это число каждый месяц придёт напоминание.
           </Text>
           <EndDateCarouselPicker value={endDate} onChange={setEndDate} />
           <View style={styles.remindRow}>
@@ -302,26 +289,20 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
             />
           </View>
           <Button
-            label={isSaving ? 'Сохраняю…' : 'Добавить'}
+            label={isSaving ? 'Сохраняю…' : 'Добавить долг'}
             onPress={() => void handleAdd()}
             loading={isSaving}
           />
-        </View>
+        </Card>
 
-        <Text style={styles.cardLabel}>Ваши долги</Text>
-        {activeTotal > 0 ? (
-          <Text style={styles.totalLine}>
-            Активные платежи: ₽{activeTotal.toLocaleString('ru-RU')} / мес
-          </Text>
-        ) : null}
-
+        <SectionLabel>Ваши долги</SectionLabel>
         {items.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>Пока нет задолженностей. Добавьте первую выше.</Text>
           </View>
         ) : (
           items.map((item) => (
-            <View key={item.id} style={styles.card}>
+            <Card key={item.id} style={styles.cardBlock} variant="flat">
               <View style={styles.itemRow}>
                 <View style={styles.itemMain}>
                   <Text style={styles.itemName}>{item.name}</Text>
@@ -329,14 +310,12 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
                     Платёж {item.paymentDay}-го · {formatDebtEndLabel(item.endDate)}
                   </Text>
                 </View>
-                <Text style={styles.itemAmount}>
-                  ₽{item.monthlyPayment.toLocaleString('ru-RU')}
-                </Text>
+                <Text style={styles.itemAmount}>{formatMoney(item.monthlyPayment)}</Text>
               </View>
 
               <View style={styles.switchRow}>
                 <Text style={styles.switchLabel}>
-                  {item.isActive ? 'Учитывается в расходах' : 'На паузе'}
+                  {item.isActive ? 'В плане платежей' : 'На паузе'}
                 </Text>
                 <Switch
                   value={item.isActive}
@@ -359,7 +338,7 @@ export function DebtsScreen({ embedded = false }: DebtsScreenProps = {}) {
               <TouchableOpacity onPress={() => handleDelete(item)}>
                 <Text style={styles.deleteLink}>Удалить</Text>
               </TouchableOpacity>
-            </View>
+            </Card>
           ))
         )}
       </KeyboardAwareScrollView>

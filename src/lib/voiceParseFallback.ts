@@ -1,6 +1,18 @@
 import type { Category } from '../types';
 import { inferCategoryFromText } from './transactionCategory';
 
+const HUNDRED_WORDS: Record<string, number> = {
+  сто: 100,
+  двести: 200,
+  триста: 300,
+  четыреста: 400,
+  пятьсот: 500,
+  шестьсот: 600,
+  семьсот: 700,
+  восемьсот: 800,
+  девятьсот: 900,
+};
+
 /** Простой разбор суммы из русской речи (запасной вариант без GPT). */
 export function extractAmountFromSpeech(text: string): number | null {
   const normalized = text.toLowerCase().replace(/,/g, '.');
@@ -9,6 +21,13 @@ export function extractAmountFromSpeech(text: string): number | null {
   if (thousandMatch) {
     const value = Number(thousandMatch[1]) * 1000;
     if (Number.isFinite(value) && value > 0) return Math.round(value);
+  }
+
+  if (/\bполтор[аы]\s*тыс/.test(normalized)) return 1500;
+  if (/\bполтора\s*тыс/.test(normalized)) return 1500;
+
+  for (const [word, amount] of Object.entries(HUNDRED_WORDS)) {
+    if (new RegExp(`\\b${word}\\b`).test(normalized)) return amount;
   }
 
   const rubleMatches = [...normalized.matchAll(/(\d[\d\s]*(?:\.\d+)?)\s*(?:₽|руб|р\b)/g)];

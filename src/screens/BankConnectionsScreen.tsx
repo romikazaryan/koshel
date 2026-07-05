@@ -12,17 +12,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { SectionLabel } from '../components/ui/SectionLabel';
+import { NavyHeroBlock } from '../components/ui/NavyHeroBlock';
 import {
-  createPendingConnection,
   fetchFinancialAccounts,
   fetchFinancialConnections,
-  requestBankSync,
   requestTInvestSync,
   revokeFinancialConnection,
 } from '../lib/financialConnections';
-import type { ProfileStackParamList } from '../navigation/types';
+import type { MainTabParamList, ProfileStackParamList } from '../navigation/types';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { heroOnDark } from '../theme/premium';
+import { spacing } from '../theme/layout';
+import { NavyShimmerPressable } from '../components/ui/NavyShimmerBackground';
 import { useThemedStyles } from '../theme/useThemedStyles';
 import {
   CONNECTION_STATUS_LABELS,
@@ -48,23 +53,29 @@ export function BankConnectionsScreen({ navigation }: Props) {
   const styles = useThemedStyles(({ colors: c, radii, shadows, cardBase }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600', marginBottom: 12 },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 6 },
-      subtitle: { fontSize: 14, lineHeight: 20, color: c.textMuted, marginBottom: 16 },
-      sectionTitle: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 10,
-        marginTop: 8,
+      content: { paddingBottom: spacing.xl },
+      scrollBody: { paddingHorizontal: spacing.xl },
+      heroInner: {
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.lg,
+      },
+      heroText: {
+        fontSize: 14,
+        lineHeight: 21,
+        color: heroOnDark.subtitle,
+      },
+      segmentWrap: {
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.sm,
       },
       providerCard: {
         ...cardBase,
-        padding: 16,
-        marginBottom: 10,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: c.borderLight,
       },
       providerName: { fontSize: 17, fontWeight: '700', color: c.text, marginBottom: 4 },
       providerDesc: { fontSize: 14, color: c.textMuted, lineHeight: 20, marginBottom: 12 },
@@ -78,7 +89,6 @@ export function BankConnectionsScreen({ navigation }: Props) {
       },
       badgeText: { fontSize: 12, fontWeight: '600', color: c.textMuted },
       actionBtn: {
-        backgroundColor: c.accent,
         borderRadius: radii.md,
         paddingVertical: 12,
         alignItems: 'center',
@@ -88,12 +98,19 @@ export function BankConnectionsScreen({ navigation }: Props) {
         borderWidth: 1,
         borderColor: c.border,
       },
+      actionBtnDisabled: {
+        backgroundColor: c.backgroundDeep,
+        opacity: 0.6,
+      },
       actionBtnText: { color: c.textOnAccent, fontWeight: '700', fontSize: 15 },
       actionBtnTextSecondary: { color: c.text, fontWeight: '700', fontSize: 15 },
       connectionCard: {
         ...cardBase,
-        padding: 16,
-        marginBottom: 10,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: c.borderLight,
       },
       connectionRow: {
         flexDirection: 'row',
@@ -152,54 +169,26 @@ export function BankConnectionsScreen({ navigation }: Props) {
   const providers = FINANCIAL_PROVIDERS.filter((p) => p.kind === segment);
   const activeConnections = connections.filter((c) => c.providerKind === segment);
 
-  const handleConnectProvider = (providerId: string, providerName: string) => {
+  const openStatementImport = () => {
+    navigation
+      .getParent<BottomTabNavigationProp<MainTabParamList>>()
+      ?.navigate('Home', { screen: 'Dashboard', params: { openImport: true } });
+  };
+
+  const handleConnectProvider = (providerId: string) => {
     if (providerId === 'tinkoff_invest') {
       navigation.navigate('TinvestConnect');
       return;
     }
-    void handleConnectDemo(providerId, providerName);
+    openStatementImport();
   };
 
   const handleSync = async (connection: FinancialConnection) => {
     setBusyId(connection.id);
     try {
-      const result =
-        connection.providerId === 'tinkoff_invest'
-          ? await requestTInvestSync(connection.id)
-          : await requestBankSync(connection.id);
+      const result = await requestTInvestSync(connection.id);
       Alert.alert(result.ok ? 'Синхронизация' : 'Ошибка', result.message);
       if (result.ok) await load();
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleConnectDemo = async (providerId: string, providerName: string) => {
-    setBusyId(providerId);
-    try {
-      const existing = connections.find(
-        (c) => c.providerId === providerId && c.status !== 'revoked'
-      );
-      const connection =
-        existing ??
-        (await createPendingConnection({
-          providerKind: segment,
-          providerId,
-          displayName: providerName,
-        }));
-
-      const result = await requestBankSync(connection.id);
-      if (result.ok) {
-        Alert.alert('Готово', `${result.message}\n\nЭто демо до подключения реального банка.`);
-        await load();
-      } else {
-        Alert.alert(
-          'Синхронизация',
-          `${result.message}\n\nЕсли функция ещё не задеплоена — выполните миграцию и deploy bank-sync в Supabase.`
-        );
-      }
-    } catch (e) {
-      Alert.alert('Ошибка', e instanceof Error ? e.message : 'Не удалось подключить');
     } finally {
       setBusyId(null);
     }
@@ -237,22 +226,23 @@ export function BankConnectionsScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.accent} />
-        }
-      >
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
-          <Text style={styles.backText}>← Профиль</Text>
-        </TouchableOpacity>
+      <ScreenHeader
+        onBack={() => navigation.goBack()}
+        backLabel="Профиль"
+        title="Подключения"
+        subtitle="Банки, брокеры и синхронизация"
+      />
 
-        <Text style={styles.title}>Подключения</Text>
-        <Text style={styles.subtitle}>
-          T-Invest — через read-only токен. Банковские выписки загружайте кнопкой на главной.
-          Автосинхронизация банков — после Open Finance.
-        </Text>
+      <NavyHeroBlock>
+        <View style={styles.heroInner}>
+          <Text style={styles.heroText}>
+            T-Invest — через read-only токен. Выписки банков — с главной. Автосинхронизация
+            дебетовых карт — после Open Finance с T‑Банком.
+          </Text>
+        </View>
+      </NavyHeroBlock>
 
+      <View style={styles.segmentWrap}>
         <SegmentedControl<FinancialProviderKind>
           options={(
             ['bank', 'broker', 'crypto'] as FinancialProviderKind[]
@@ -263,14 +253,22 @@ export function BankConnectionsScreen({ navigation }: Props) {
           value={segment}
           onChange={setSegment}
         />
+      </View>
 
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.accent} />
+        }
+      >
+        <View style={styles.scrollBody}>
         {loading ? (
           <ActivityIndicator color={colors.accent} style={{ marginTop: 24 }} />
         ) : (
           <>
             {activeConnections.length > 0 ? (
               <>
-                <Text style={styles.sectionTitle}>Подключено</Text>
+                <SectionLabel>Подключено</SectionLabel>
                 {activeConnections.map((conn) => {
                   const def = getProviderDefinition(conn.providerId);
                   const linkedAccounts = accounts.filter((a) => a.connectionId === conn.id);
@@ -295,15 +293,19 @@ export function BankConnectionsScreen({ navigation }: Props) {
                           : ''}
                       </Text>
                       <View style={styles.rowActions}>
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.rowAction]}
-                          onPress={() => void handleSync(conn)}
-                          disabled={busyId === conn.id}
-                        >
-                          <Text style={styles.actionBtnText}>
-                            {busyId === conn.id ? '…' : 'Обновить'}
-                          </Text>
-                        </TouchableOpacity>
+                        {conn.providerId === 'tinkoff_invest' ? (
+                          <NavyShimmerPressable
+                            style={[styles.actionBtn, styles.rowAction]}
+                            contentStyle={{ alignItems: 'center' }}
+                            onPress={() => void handleSync(conn)}
+                            disabled={busyId === conn.id}
+                            glow="compact"
+                          >
+                            <Text style={styles.actionBtnText}>
+                              {busyId === conn.id ? '…' : 'Обновить'}
+                            </Text>
+                          </NavyShimmerPressable>
+                        ) : null}
                         <TouchableOpacity
                           style={[styles.actionBtn, styles.actionBtnSecondary, styles.rowAction]}
                           onPress={() => handleRevoke(conn)}
@@ -318,7 +320,7 @@ export function BankConnectionsScreen({ navigation }: Props) {
               </>
             ) : null}
 
-            <Text style={styles.sectionTitle}>Доступные провайдеры</Text>
+            <SectionLabel>Доступные провайдеры</SectionLabel>
             {providers.map((provider) => (
               <View key={provider.id} style={styles.providerCard}>
                 <Text style={styles.providerName}>{provider.name}</Text>
@@ -332,19 +334,27 @@ export function BankConnectionsScreen({ navigation }: Props) {
                         : 'Доступно'}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.actionBtn}
-                  onPress={() => handleConnectProvider(provider.id, provider.name)}
-                  disabled={busyId === provider.id}
-                >
-                  <Text style={styles.actionBtnText}>
-                    {busyId === provider.id
-                      ? 'Подключение…'
-                      : provider.id === 'tinkoff_invest'
+                {provider.id === 'tinkoff_invest' || provider.statementImport ? (
+                  <NavyShimmerPressable
+                    style={styles.actionBtn}
+                    contentStyle={{ alignItems: 'center' }}
+                    onPress={() => handleConnectProvider(provider.id)}
+                    disabled={provider.id !== 'tinkoff_invest' && !provider.statementImport}
+                    glow="compact"
+                  >
+                    <Text style={styles.actionBtnText}>
+                      {provider.id === 'tinkoff_invest'
                         ? 'Подключить'
-                        : 'Попробовать демо'}
-                  </Text>
-                </TouchableOpacity>
+                        : provider.statementImport
+                          ? 'Загрузить выписку'
+                          : 'Скоро'}
+                    </Text>
+                  </NavyShimmerPressable>
+                ) : (
+                  <View style={[styles.actionBtn, styles.actionBtnDisabled]}>
+                    <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>Скоро</Text>
+                  </View>
+                )}
               </View>
             ))}
 
@@ -362,6 +372,7 @@ export function BankConnectionsScreen({ navigation }: Props) {
             </View>
           </>
         )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

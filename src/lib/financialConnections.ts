@@ -52,10 +52,11 @@ function mapAccount(row: Record<string, unknown>): FinancialAccount {
 
 export async function fetchFinancialConnections(): Promise<FinancialConnection[]> {
   if (!hasSupabase || !supabase) return [];
+  const client = supabase;
 
   const data = await withNetworkRetries(async () => {
     const result = await withTimeout(
-      supabase
+      client
         .from('financial_connections')
         .select(
           'id,provider_kind,provider_id,status,display_name,last_sync_at,last_sync_error,created_at'

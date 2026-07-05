@@ -7,5 +7,5 @@ export function formatRecurringExpenseHint(subscriptionsTotal: number, debtsTota
     parts.push(`кредиты ₽${debtsTotal.toLocaleString('ru-RU')}`);
   }
   if (parts.length === 0) return null;
-  return `в т.ч. ${parts.join(' · ')}`;
+  return `план: ${parts.join(' · ')}`;
 }

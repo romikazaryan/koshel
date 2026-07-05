@@ -3,6 +3,8 @@ import type { Session, User } from '@supabase/supabase-js';
 import { hasSupabase, supabase } from '../lib/supabase';
 import { withTimeout } from '../lib/asyncUtils';
 import { mapAuthErrorMessage } from '../lib/authErrors';
+import { invalidateDashboardCache } from '../lib/dashboardCache';
+import { withNetworkRetries } from '../lib/asyncUtils';
 import { getEmailRedirectUrl } from '../lib/authRedirect';
 
 type AuthContextValue = {
@@ -44,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         finishBoot(null);
       });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_IN') {
+        void invalidateDashboardCache();
+      }
       finishBoot(nextSession);
     });
 
@@ -60,47 +65,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    if (!supabase) throw new Error('Supabase не настроен.');
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
+    const client = supabase;
+    if (!client) throw new Error('Supabase не настроен.');
+    try {
+      await withNetworkRetries(async () => {
+        const { error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+      });
+    } catch (error) {
+      throw new Error(mapAuthErrorMessage(error));
+    }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string) => {
-    if (!supabase) throw new Error('Supabase не настроен.');
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: getEmailRedirectUrl(),
-      },
-    });
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
-    return { needsEmailConfirmation: !data.session };
+    const client = supabase;
+    if (!client) throw new Error('Supabase не настроен.');
+    try {
+      return await withNetworkRetries(async () => {
+        const { data, error } = await client.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: getEmailRedirectUrl(),
+          },
+        });
+        if (error) throw error;
+        return { needsEmailConfirmation: !data.session };
+      });
+    } catch (error) {
+      throw new Error(mapAuthErrorMessage(error));
+    }
   }, []);
 
   const sendPhoneOtp = useCallback(async (phoneE164: string) => {
-    if (!supabase) throw new Error('Supabase не настроен.');
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: phoneE164,
-      options: { channel: 'sms' },
-    });
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
+    const client = supabase;
+    if (!client) throw new Error('Supabase не настроен.');
+    try {
+      await withNetworkRetries(async () => {
+        const { error } = await client.auth.signInWithOtp({
+          phone: phoneE164,
+          options: { channel: 'sms' },
+        });
+        if (error) throw error;
+      });
+    } catch (error) {
+      throw new Error(mapAuthErrorMessage(error));
+    }
   }, []);
 
   const verifyPhoneOtp = useCallback(async (phoneE164: string, token: string) => {
-    if (!supabase) throw new Error('Supabase не настроен.');
-    const { error } = await supabase.auth.verifyOtp({
-      phone: phoneE164,
-      token: token.trim(),
-      type: 'sms',
-    });
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
+    const client = supabase;
+    if (!client) throw new Error('Supabase не настроен.');
+    try {
+      await withNetworkRetries(async () => {
+        const { error } = await client.auth.verifyOtp({
+          phone: phoneE164,
+          token: token.trim(),
+          type: 'sms',
+        });
+        if (error) throw error;
+      });
+    } catch (error) {
+      throw new Error(mapAuthErrorMessage(error));
+    }
   }, []);
 
   const signOut = useCallback(async () => {
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
-    if (error) throw new Error(mapAuthErrorMessage(error.message));
+    if (error) throw new Error(mapAuthErrorMessage(error));
   }, []);
 
   const value = useMemo<AuthContextValue>(

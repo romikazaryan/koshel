@@ -1,7 +1,9 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { darkColors } from '../../theme/colors';
+import { NavyShimmerShell } from '../ui/NavyShimmerBackground';
 import { useThemedStyles } from '../../theme/useThemedStyles';
+import { formatMoney } from '../../lib/formatMoney';
 
 type Props = {
   balance: number;
@@ -21,18 +23,22 @@ export function DashboardOverviewHero({
   onOpenExpenses,
 }: Props) {
   const { isDark } = useAppTheme();
+
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
       card: {
-        backgroundColor: c.navy,
         borderRadius: radii.xl,
         paddingHorizontal: 18,
         paddingTop: 20,
         paddingBottom: 16,
         marginBottom: 14,
         borderWidth: 1,
-        borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
         ...shadows.card,
+      },
+      content: {
+        position: 'relative',
+        zIndex: 2,
       },
       balanceBlock: {
         marginBottom: 16,
@@ -107,46 +113,48 @@ export function DashboardOverviewHero({
   );
 
   return (
-    <View style={styles.card}>
-      <View style={styles.balanceBlock}>
-        <Text style={styles.balanceLabel}>Баланс</Text>
-        <Text style={styles.balanceValue}>₽{balance.toLocaleString('ru-RU')}</Text>
-      </View>
+    <NavyShimmerShell style={styles.card} idPrefix="dashHero" showGoldEdge goldEdgeInset={18}>
+      <View style={styles.content}>
+        <View style={styles.balanceBlock}>
+          <Text style={styles.balanceLabel}>Баланс</Text>
+          <Text style={styles.balanceValue}>{formatMoney(balance)}</Text>
+        </View>
 
-      <View style={styles.metricsRow}>
-        <TouchableOpacity
-          style={styles.metricCard}
-          onPress={onOpenIncome}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Открыть доходы"
-        >
-          <View style={styles.metricTopRow}>
-            <Text style={[styles.metricLabel, styles.metricLabelIncome]}>Доход</Text>
-            <Text style={styles.metricChevron}>›</Text>
-          </View>
-          <Text style={styles.metricValue}>₽{totalIncome.toLocaleString('ru-RU')}</Text>
-          <Text style={styles.metricAction}>Подробнее</Text>
-        </TouchableOpacity>
+        <View style={styles.metricsRow}>
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={onOpenIncome}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Открыть доходы"
+          >
+            <View style={styles.metricTopRow}>
+              <Text style={[styles.metricLabel, styles.metricLabelIncome]}>Доход</Text>
+              <Text style={styles.metricChevron}>›</Text>
+            </View>
+            <Text style={styles.metricValue}>{formatMoney(totalIncome)}</Text>
+            <Text style={styles.metricAction}>Подробнее</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.metricCard}
-          onPress={onOpenExpenses}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Открыть расходы"
-        >
-          <View style={styles.metricTopRow}>
-            <Text style={[styles.metricLabel, styles.metricLabelExpense]}>Расходы</Text>
-            <Text style={styles.metricChevron}>›</Text>
-          </View>
-          <Text style={styles.metricValue}>₽{totalExpenses.toLocaleString('ru-RU')}</Text>
-          <Text style={styles.metricAction}>Подробнее</Text>
-          {recurringExpenseHint ? (
-            <Text style={styles.metricHint}>{recurringExpenseHint}</Text>
-          ) : null}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={onOpenExpenses}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Открыть расходы"
+          >
+            <View style={styles.metricTopRow}>
+              <Text style={[styles.metricLabel, styles.metricLabelExpense]}>Расходы</Text>
+              <Text style={styles.metricChevron}>›</Text>
+            </View>
+            <Text style={styles.metricValue}>{formatMoney(totalExpenses)}</Text>
+            <Text style={styles.metricAction}>Подробнее</Text>
+            {recurringExpenseHint ? (
+              <Text style={styles.metricHint}>{recurringExpenseHint}</Text>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </NavyShimmerShell>
   );
 }

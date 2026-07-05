@@ -14,8 +14,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { DateCarouselPicker } from '../components/DateCarouselPicker';
 import { MonthSwitcher } from '../components/MonthSwitcher';
 import { TransactionList } from '../components/TransactionList';
+import { Input } from '../components/ui/Input';
+import { HorizontalChipCarousel } from '../components/ui/HorizontalChipCarousel';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { deleteTransaction, fetchTransactionsForMonth } from '../lib/transactions';
 import { filterIncomeForDisplay } from '../lib/purchaseRefunds';
+import { formatMoney } from '../lib/formatMoney';
+import { exportTransactionsCsv } from '../lib/exportTransactions';
+import { exportMonthReportPdf } from '../lib/exportMonthReport';
 import {
   monthCacheKey,
   readDashboardCache,
@@ -33,6 +39,8 @@ import { hasSupabase } from '../lib/supabase';
 import type { Transaction } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { moneyText, spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'TransactionHistory'>;
@@ -50,40 +58,62 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions ?? []);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isUserRefreshing, setIsUserRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const deleteInFlightRef = useRef<string | null>(null);
   const monthKeyRef = useRef(monthCacheKey(initialMonth));
 
-  const styles = useThemedStyles(({ colors: c, cardBase }) =>
+  const styles = useThemedStyles(({ colors: c, cardBase, radii, shadows }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
       scroll: { flex: 1 },
-      content: { paddingHorizontal: 20, paddingBottom: 40 },
-      backButton: { marginBottom: 8 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 26, fontWeight: '800', color: c.text, marginBottom: 4 },
-      subtitle: { fontSize: 14, color: c.textMuted, marginBottom: 16 },
-      totalCard: {
-        backgroundColor: c.surface,
-        borderRadius: 16,
+      content: { paddingHorizontal: spacing.xl, paddingBottom: 48 },
+      exportActions: { flexDirection: 'row', gap: 6 },
+      exportBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 999,
         borderWidth: 1,
         borderColor: c.borderLight,
-        padding: 16,
-        marginBottom: 16,
+        backgroundColor: c.surface,
+        ...shadows.soft,
       },
+      exportBtnDisabled: { opacity: 0.5 },
+      exportBtnText: { ...typography.caption, color: c.text, fontWeight: '700', fontSize: 12 },
+      searchInput: { marginBottom: spacing.md },
+      totalCard: {
+        ...cardBase,
+        padding: spacing.lg,
+        marginBottom: spacing.lg,
+        borderLeftWidth: 4,
+      },
+      totalCardIncome: { borderLeftColor: c.income },
+      totalCardExpense: { borderLeftColor: c.expense },
       totalLabel: {
-        fontSize: 12,
-        fontWeight: '700',
+        ...typography.overline,
         color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 6,
+        letterSpacing: 0.8,
+        marginBottom: spacing.sm,
       },
-      totalValue: { fontSize: 28, fontWeight: '800', color: c.text },
+      totalValue: {
+        fontSize: 32,
+        fontWeight: '900',
+        color: c.text,
+        letterSpacing: -0.8,
+        ...moneyText,
+      },
+      totalValueIncome: { color: c.incomeDark },
+      totalValueExpense: { color: c.expenseDark },
       dayCard: {
         ...cardBase,
-        padding: 16,
-        marginBottom: 14,
-        borderLeftWidth: 3,
+        padding: spacing.lg,
+        marginBottom: spacing.md,
+        borderLeftWidth: 4,
       },
       dayCardIncome: {
         borderLeftColor: c.income,
@@ -92,15 +122,17 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
         borderLeftColor: c.expense,
       },
       dayLabel: {
-        fontSize: 14,
-        fontWeight: '600',
+        ...typography.meta,
         color: c.textMuted,
         marginBottom: 4,
         textTransform: 'capitalize',
+        fontWeight: '600',
       },
       dayTotal: {
-        fontSize: 26,
-        fontWeight: '800',
+        fontSize: 28,
+        fontWeight: '900',
+        letterSpacing: -0.5,
+        ...moneyText,
       },
       dayTotalIncome: {
         color: c.incomeDark,
@@ -125,6 +157,100 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
 
   const monthTotal = useMemo(() => sumTransactions(displayTransactions), [displayTransactions]);
   const dayTotal = useMemo(() => sumTransactions(dayTransactions), [dayTransactions]);
+
+  const categoryOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    displayTransactions.forEach((item) => {
+      counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+    });
+    const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    return [
+      { value: 'all', label: 'Все', count: displayTransactions.length },
+      ...sorted.map(([category, count]) => ({ value: category, label: category, count })),
+    ];
+  }, [displayTransactions]);
+
+  const isFiltering = searchQuery.trim().length > 0 || categoryFilter !== 'all';
+
+  const filteredTransactions = useMemo(() => {
+    if (!isFiltering) return [];
+    const query = searchQuery.trim().toLowerCase();
+    return displayTransactions
+      .filter((item) => {
+        if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+        if (!query) return true;
+        const haystack = `${item.title} ${item.category} ${item.note ?? ''}`.toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice()
+      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  }, [displayTransactions, isFiltering, searchQuery, categoryFilter]);
+
+  const filteredTotal = useMemo(() => sumTransactions(filteredTransactions), [filteredTransactions]);
+
+  useEffect(() => {
+    if (categoryFilter !== 'all' && !categoryOptions.some((o) => o.value === categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [categoryOptions, categoryFilter]);
+
+  const handleExport = useCallback(async () => {
+    const data = isFiltering ? filteredTransactions : displayTransactions;
+    if (data.length === 0) {
+      Alert.alert('Нечего экспортировать', 'За выбранный период нет операций.');
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const kindPart = kind === 'income' ? 'dohody' : 'rashody';
+      const result = await exportTransactionsCsv(
+        data,
+        `koshel-${kindPart}-${monthCacheKey(selectedMonth)}`
+      );
+      if (result === 'unavailable') {
+        Alert.alert('Недоступно', 'Поделиться файлом нельзя на этом устройстве.');
+      }
+    } catch (error) {
+      Alert.alert(
+        'Ошибка экспорта',
+        error instanceof Error ? error.message : 'Не удалось создать файл.'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isFiltering, filteredTransactions, displayTransactions, kind, selectedMonth]);
+
+  const handleExportPdf = useCallback(async () => {
+    if (kind !== 'expense') return;
+    setIsExportingPdf(true);
+    try {
+      const allRows = await fetchTransactionsForMonth(selectedMonth);
+      const income = allRows
+        .filter((row) => row.kind === 'income')
+        .reduce((sum, row) => sum + row.amount, 0);
+      const expenses = allRows
+        .filter((row) => row.kind === 'expense')
+        .reduce((sum, row) => sum + row.amount, 0);
+      const result = await exportMonthReportPdf({
+        monthLabel: formatMonthLabel(selectedMonth),
+        income,
+        expenses,
+        balance: income - expenses,
+        monthlyBudget: null,
+        transactions: allRows,
+      });
+      if (result === 'unavailable') {
+        Alert.alert('Недоступно', 'Поделиться PDF на этом устройстве нельзя.');
+      }
+    } catch (error) {
+      Alert.alert(
+        'Ошибка отчёта',
+        error instanceof Error ? error.message : 'Не удалось создать PDF.'
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [kind, selectedMonth]);
 
   useEffect(() => {
     if (monthDates.length === 0) {
@@ -229,62 +355,148 @@ export function TransactionHistoryScreen({ navigation, route }: Props) {
           />
         }
       >
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Назад</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>{TITLES[kind]}</Text>
-        <Text style={styles.subtitle}>{formatMonthLabel(selectedMonth)}</Text>
+        <ScreenHeader
+          onBack={() => navigation.goBack()}
+          title={TITLES[kind]}
+          subtitle={formatMonthLabel(selectedMonth)}
+          rightAction={
+            <View style={styles.exportActions}>
+              {kind === 'expense' ? (
+                <TouchableOpacity
+                  style={[styles.exportBtn, isExportingPdf && styles.exportBtnDisabled]}
+                  onPress={() => void handleExportPdf()}
+                  disabled={isExportingPdf || isExporting}
+                  accessibilityRole="button"
+                  accessibilityLabel="PDF-сводка месяца"
+                >
+                  <Ionicons name="document-outline" size={15} color={colors.accentDark} />
+                  <Text style={styles.exportBtnText}>{isExportingPdf ? '…' : 'PDF'}</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.exportBtn, isExporting && styles.exportBtnDisabled]}
+                onPress={() => void handleExport()}
+                disabled={isExporting || isExportingPdf}
+                accessibilityRole="button"
+                accessibilityLabel="Экспортировать операции в CSV"
+              >
+                <Ionicons name="share-outline" size={15} color={colors.accentDark} />
+                <Text style={styles.exportBtnText}>{isExporting ? '…' : 'CSV'}</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
 
         <MonthSwitcher value={selectedMonth} onChange={setSelectedMonth} />
 
-        {monthDates.length > 0 && selectedDate ? (
-          <DateCarouselPicker
-            dates={monthDates}
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-          />
-        ) : null}
+        <Input
+          containerStyle={styles.searchInput}
+          placeholder="Поиск по названию или категории"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCorrect={false}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
 
-        <View style={styles.totalCard}>
-          <Text style={styles.totalLabel}>
-            {kind === 'income' ? 'Всего доходов за месяц' : 'Всего расходов за месяц'}
-          </Text>
-          <Text style={styles.totalValue}>₽{monthTotal.toLocaleString('ru-RU')}</Text>
-        </View>
+        <HorizontalChipCarousel
+          options={categoryOptions}
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+        />
 
-        {monthDates.length > 0 && selectedDate ? (
-          <View
-            style={[
-              styles.dayCard,
-              kind === 'income' ? styles.dayCardIncome : styles.dayCardExpense,
-            ]}
-          >
-            <Text style={styles.dayLabel}>{formatHistoryDayLabel(selectedDate)}</Text>
-            <Text
+        {isFiltering ? (
+          <>
+            <View
               style={[
-                styles.dayTotal,
-                kind === 'income' ? styles.dayTotalIncome : styles.dayTotalExpense,
+                styles.totalCard,
+                kind === 'income' ? styles.totalCardIncome : styles.totalCardExpense,
               ]}
             >
-              ₽{dayTotal.toLocaleString('ru-RU')}
-            </Text>
-          </View>
-        ) : null}
+              <Text style={styles.totalLabel}>Найдено · {filteredTransactions.length}</Text>
+              <Text
+                style={[
+                  styles.totalValue,
+                  kind === 'income' ? styles.totalValueIncome : styles.totalValueExpense,
+                ]}
+              >
+                {formatMoney(filteredTotal)}
+              </Text>
+            </View>
 
-        {monthDates.length > 0 && selectedDate ? (
-          <TransactionList
-            transactions={dayTransactions}
-            kind={kind}
-            showHeading={false}
-            emptyTitle={
-              kind === 'income' ? 'В этот день доходов не было' : 'В этот день расходов не было'
-            }
-            emptyHint=""
-            onEdit={editTransaction}
-            onRemove={removeTransaction}
-          />
-        ) : null}
+            <TransactionList
+              transactions={filteredTransactions}
+              kind={kind}
+              showHeading={false}
+              emptyTitle="Ничего не найдено"
+              emptyHint="Измените запрос или категорию"
+              onEdit={editTransaction}
+              onRemove={removeTransaction}
+            />
+          </>
+        ) : (
+          <>
+            {monthDates.length > 0 && selectedDate ? (
+              <DateCarouselPicker
+                dates={monthDates}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+              />
+            ) : null}
+
+            <View
+              style={[
+                styles.totalCard,
+                kind === 'income' ? styles.totalCardIncome : styles.totalCardExpense,
+              ]}
+            >
+              <Text style={styles.totalLabel}>
+                {kind === 'income' ? 'Всего доходов за месяц' : 'Всего расходов за месяц'}
+              </Text>
+              <Text
+                style={[
+                  styles.totalValue,
+                  kind === 'income' ? styles.totalValueIncome : styles.totalValueExpense,
+                ]}
+              >
+                {formatMoney(monthTotal)}
+              </Text>
+            </View>
+
+            {monthDates.length > 0 && selectedDate ? (
+              <View
+                style={[
+                  styles.dayCard,
+                  kind === 'income' ? styles.dayCardIncome : styles.dayCardExpense,
+                ]}
+              >
+                <Text style={styles.dayLabel}>{formatHistoryDayLabel(selectedDate)}</Text>
+                <Text
+                  style={[
+                    styles.dayTotal,
+                    kind === 'income' ? styles.dayTotalIncome : styles.dayTotalExpense,
+                  ]}
+                >
+                  {formatMoney(dayTotal)}
+                </Text>
+              </View>
+            ) : null}
+
+            {monthDates.length > 0 && selectedDate ? (
+              <TransactionList
+                transactions={dayTransactions}
+                kind={kind}
+                showHeading={false}
+                emptyTitle={
+                  kind === 'income' ? 'В этот день доходов не было' : 'В этот день расходов не было'
+                }
+                emptyHint=""
+                onEdit={editTransaction}
+                onRemove={removeTransaction}
+              />
+            ) : null}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

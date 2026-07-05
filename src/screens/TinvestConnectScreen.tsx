@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Linking,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
+import { Button } from '../components/ui/Button';
 import { connectTInvestToken, requestTInvestSync } from '../lib/financialConnections';
 import type { ProfileStackParamList } from '../navigation/types';
 import { useAppTheme } from '../contexts/ThemeContext';
@@ -46,14 +46,6 @@ export function TinvestConnectScreen({ navigation }: Props) {
         marginBottom: 8,
       },
       hint: { fontSize: 12, lineHeight: 18, color: c.textMuted, marginBottom: 16 },
-      button: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 16,
-        alignItems: 'center',
-      },
-      buttonDisabled: { opacity: 0.6 },
-      buttonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
       warning: {
         padding: 14,
         borderRadius: radii.md,
@@ -144,17 +136,13 @@ export function TinvestConnectScreen({ navigation }: Props) {
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.button, isConnecting && styles.buttonDisabled, { marginTop: 20 }]}
+        <Button
+          label="Подключить и синхронизировать"
           onPress={() => void handleConnect()}
+          loading={isConnecting}
           disabled={isConnecting}
-        >
-          {isConnecting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Подключить и синхронизировать</Text>
-          )}
-        </TouchableOpacity>
+          style={{ marginTop: 20 }}
+        />
       </KeyboardAwareScrollView>
     </SafeAreaView>
   );

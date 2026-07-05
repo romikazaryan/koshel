@@ -6,12 +6,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
+import { SectionLabel } from '../components/ui/SectionLabel';
+import { Button } from '../components/ui/Button';
 import {
   deleteStatementImport,
   fetchStatementImports,
@@ -20,6 +23,8 @@ import {
 import { invalidateDashboardCache } from '../lib/dashboardCache';
 import type { HomeStackParamList } from '../navigation/types';
 import { useAppTheme } from '../contexts/ThemeContext';
+import { LUXURY_GOLD } from '../theme/premium';
+import { spacing, typography } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'StatementImports'>;
@@ -35,6 +40,12 @@ function formatImportedAt(value: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function importsCountLabel(count: number) {
+  if (count === 1) return '1 выписка';
+  if (count >= 2 && count <= 4) return `${count} выписки`;
+  return `${count} выписок`;
 }
 
 function accountKindLabel(kind: string | null) {
@@ -53,34 +64,31 @@ export function StatementImportsScreen({ navigation }: Props) {
   const styles = useThemedStyles(({ colors: c, radii, cardBase }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600', marginBottom: 12 },
-      title: { fontSize: 28, fontWeight: '800', color: c.text, marginBottom: 6 },
-      subtitle: { fontSize: 14, lineHeight: 20, color: c.textMuted, marginBottom: 16 },
+      content: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
       card: {
         ...cardBase,
-        padding: 16,
-        marginBottom: 10,
+        padding: spacing.md,
+        marginBottom: spacing.sm,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: c.borderLight,
         gap: 6,
       },
-      cardTitle: { fontSize: 16, fontWeight: '700', color: c.text },
-      cardMeta: { fontSize: 14, lineHeight: 20, color: c.textMuted },
-      deleteBtn: {
-        marginTop: 8,
-        borderRadius: radii.md,
-        borderWidth: 1,
-        borderColor: c.expense,
-        paddingVertical: 10,
-        alignItems: 'center',
-      },
-      deleteBtnText: { color: c.expense, fontWeight: '700', fontSize: 15 },
+      cardTitle: { ...typography.h3, fontSize: 16 },
+      cardMeta: { ...typography.body, fontSize: 14, lineHeight: 20, color: c.textMuted },
       empty: {
         ...cardBase,
-        padding: 24,
+        padding: spacing.xl,
         alignItems: 'center',
+        borderRadius: radii.xl,
+        borderStyle: 'dashed',
+        borderWidth: 1,
+        borderColor: c.borderLight,
       },
-      emptyText: { color: c.textMuted, textAlign: 'center', lineHeight: 20 },
-      loader: { marginTop: 40 },
+      emptyIcon: { marginBottom: spacing.md },
+      emptyTitle: { ...typography.h3, marginBottom: spacing.sm, textAlign: 'center' },
+      emptyText: { ...typography.body, color: c.textMuted, textAlign: 'center', lineHeight: 22 },
+      loader: { marginTop: spacing.xl },
     })
   );
 
@@ -141,7 +149,14 @@ export function StatementImportsScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScreenHeader
+        onBack={() => navigation.goBack()}
+        backLabel="Главная"
+        title="Импортированные выписки"
+        subtitle="Удаление выписки убирает все связанные операции"
+      />
+
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -155,58 +170,56 @@ export function StatementImportsScreen({ navigation }: Props) {
           />
         }
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Назад</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Импортированные выписки</Text>
-        <Text style={styles.subtitle}>
-          Удаление выписки убирает все связанные с ней операции из расходов и доходов.
-        </Text>
-
         {loading ? (
           <ActivityIndicator style={styles.loader} color={colors.accent} />
         ) : items.length === 0 ? (
           <View style={styles.empty}>
+            <Ionicons
+              name="document-text-outline"
+              size={40}
+              color={LUXURY_GOLD}
+              style={styles.emptyIcon}
+            />
+            <Text style={styles.emptyTitle}>Выписок пока нет</Text>
             <Text style={styles.emptyText}>
-              Пока нет импортированных выписок. Загрузите CSV или PDF на главной.
+              Загрузите CSV или PDF с главного экрана — операции появятся в истории.
             </Text>
           </View>
         ) : (
-          items.map((item) => {
-            const kind = accountKindLabel(item.accountKind);
-            const cardLabel = item.cardLast4 ? ` ···${item.cardLast4}` : '';
-            const count = item.importedCount || item.rowCount;
-            return (
-              <View key={item.id} style={styles.card}>
-                <Text style={styles.cardTitle}>{item.fileName}</Text>
-                <Text style={styles.cardMeta}>
-                  {item.providerName} · {item.accountName}
-                  {kind ? ` · ${kind}${cardLabel}` : cardLabel}
-                </Text>
-                <Text style={styles.cardMeta}>
-                  {count} операций · {formatImportedAt(item.importedAt)}
-                </Text>
-                {item.kind === 'legacy' ? (
+          <>
+            <SectionLabel>{importsCountLabel(items.length)}</SectionLabel>
+            {items.map((item) => {
+              const kind = accountKindLabel(item.accountKind);
+              const cardLabel = item.cardLast4 ? ` ···${item.cardLast4}` : '';
+              const count = item.importedCount || item.rowCount;
+              return (
+                <View key={item.id} style={styles.card}>
+                  <Text style={styles.cardTitle}>{item.fileName}</Text>
                   <Text style={styles.cardMeta}>
-                    Импорт до обновления приложения — удалятся все операции этого счёта без
-                    привязки к файлу.
+                    {item.providerName} · {item.accountName}
+                    {kind ? ` · ${kind}${cardLabel}` : cardLabel}
                   </Text>
-                ) : null}
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => confirmDelete(item)}
-                  disabled={busyId === item.id}
-                >
-                  {busyId === item.id ? (
-                    <ActivityIndicator color={colors.expense} />
-                  ) : (
-                    <Text style={styles.deleteBtnText}>Удалить выписку</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            );
-          })
+                  <Text style={styles.cardMeta}>
+                    {count} операций · {formatImportedAt(item.importedAt)}
+                  </Text>
+                  {item.kind === 'legacy' ? (
+                    <Text style={styles.cardMeta}>
+                      Импорт до обновления — удалятся все операции этого счёта.
+                    </Text>
+                  ) : null}
+                  <Button
+                    label={busyId === item.id ? 'Удаляем…' : 'Удалить выписку'}
+                    variant="danger"
+                    size="md"
+                    onPress={() => confirmDelete(item)}
+                    loading={busyId === item.id}
+                    disabled={busyId === item.id}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                </View>
+              );
+            })}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

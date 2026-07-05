@@ -4,17 +4,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from '../components/ui/KeyboardAwareScrollView';
 import { Button } from '../components/ui/Button';
+import { Chip } from '../components/ui/Chip';
 import { Input } from '../components/ui/Input';
+import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../constants/categories';
 import { updateTransaction } from '../lib/transactions';
 import type { HomeStackParamList } from '../navigation/types';
+import { useAppTheme } from '../contexts/ThemeContext';
+import { spacing } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'EditTransaction'>;
@@ -24,35 +27,19 @@ function isValidDate(dateStr: string) {
 }
 
 export function EditTransactionScreen({ navigation, route }: Props) {
-  const styles = useThemedStyles(({ colors: c }) =>
+  const { colors } = useAppTheme();
+  const styles = useThemedStyles(({ colors: c, radii }) =>
     StyleSheet.create({
       safeArea: { flex: 1, backgroundColor: 'transparent' },
-      content: { padding: 20, paddingBottom: 40 },
-      backButton: { marginBottom: 12 },
-      backText: { color: c.accentDark, fontSize: 16, fontWeight: '600' },
-      title: { fontSize: 26, fontWeight: '800', color: c.text, marginBottom: 20 },
-      field: { marginBottom: 18 },
-      label: { fontSize: 14, fontWeight: '600', color: c.textMuted, marginBottom: 8 },
-      textArea: { minHeight: 88, textAlignVertical: 'top' },
-      pillRow: { flexDirection: 'row', flexWrap: 'wrap' },
-      pillSpacing: { marginRight: 8, marginBottom: 8 },
-      pill: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: c.surface,
-        borderWidth: 1,
-        borderColor: c.border,
-      },
-      pillActive: { backgroundColor: c.accent, borderColor: c.accent },
-      pillText: { color: c.textMuted, fontSize: 14, fontWeight: '600' },
-      pillTextActive: { color: c.textOnAccent },
+      content: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl },
+      field: { marginBottom: spacing.lg },
+      chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
       metaBox: {
         borderWidth: 1,
         borderColor: c.borderLight,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
+        borderRadius: radii.lg,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
         backgroundColor: c.surfaceMuted,
       },
       metaText: {
@@ -90,12 +77,7 @@ export function EditTransactionScreen({ navigation, route }: Props) {
   if (!transaction?.id) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <View style={styles.content}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← Назад</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>Запись не найдена</Text>
-        </View>
+        <ScreenHeader onBack={() => navigation.goBack()} title="Запись не найдена" />
       </SafeAreaView>
     );
   }
@@ -133,21 +115,19 @@ export function EditTransactionScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <ScreenHeader
+        onBack={() => navigation.goBack()}
+        backLabel="Назад"
+        title={isIncome ? 'Редактировать доход' : 'Редактировать расход'}
+      />
       <KeyboardAwareScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardBottomPadding={120}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Назад</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.title}>{isIncome ? 'Редактировать доход' : 'Редактировать расход'}</Text>
-
         <View style={styles.field}>
-          <Text style={styles.label}>Сумма</Text>
-          <Input keyboardType="numeric" value={amount} onChangeText={setAmount} />
+          <Input label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Название</Text>
           <Input
+            label="Название"
             value={title}
             onChangeText={setTitle}
             placeholder={isIncome ? 'Зарплата за май' : 'Например, Ozon'}
@@ -155,26 +135,25 @@ export function EditTransactionScreen({ navigation, route }: Props) {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Категория</Text>
-          <View style={styles.pillRow}>
-            {categories.map((item) => {
-              const selected = category === item;
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[styles.pill, styles.pillSpacing, selected && styles.pillActive]}
-                  onPress={() => setCategory(item)}
-                >
-                  <Text style={[styles.pillText, selected && styles.pillTextActive]}>{item}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>
+            Категория
+          </Text>
+          <View style={styles.chipRow}>
+            {categories.map((item) => (
+              <Chip
+                key={item}
+                label={item}
+                active={category === item}
+                variant={isIncome ? 'income' : 'expense'}
+                onPress={() => setCategory(item)}
+              />
+            ))}
           </View>
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.label}>Дата</Text>
           <Input
+            label="Дата"
             placeholder="2026-06-02"
             value={date}
             onChangeText={setDate}
@@ -184,16 +163,18 @@ export function EditTransactionScreen({ navigation, route }: Props) {
 
         {isImported && importNoteRef.current ? (
           <View style={styles.field}>
-            <Text style={styles.label}>Из выписки</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textMuted, marginBottom: 8 }}>
+              Из выписки
+            </Text>
             <View style={styles.metaBox}>
               <Text style={styles.metaText}>{importNoteRef.current}</Text>
             </View>
           </View>
         ) : (
           <View style={styles.field}>
-            <Text style={styles.label}>{isIncome ? 'Описание' : 'Заметка'}</Text>
             <Input
-              style={styles.textArea}
+              label={isIncome ? 'Описание' : 'Заметка'}
+              style={{ minHeight: 88, textAlignVertical: 'top' }}
               value={note}
               onChangeText={setNote}
               multiline
@@ -204,10 +185,10 @@ export function EditTransactionScreen({ navigation, route }: Props) {
         )}
 
         <Button
-          label={isSaving ? 'Сохраняю...' : 'Сохранить'}
+          label="Сохранить"
           onPress={() => void handleSave()}
           loading={isSaving}
-          style={{ marginTop: 8 }}
+          style={{ marginTop: spacing.sm }}
         />
       </KeyboardAwareScrollView>
     </SafeAreaView>

@@ -44,6 +44,27 @@ list_connected_udids() {
   } | awk 'NF && !seen[$0]++'
 }
 
+list_connected_named() {
+  # Человекочитаемый список реально подключённых устройств (имя + UDID),
+  # строго из секции "== Devices ==" xctrace.
+  xcrun xctrace list devices 2>/dev/null \
+    | awk '
+        /^== Devices ==/ { s=1; next }
+        /^== / { s=0 }
+        s
+      ' \
+    | grep -E '\([0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}\)'
+}
+
+device_reachable_via_devicectl() {
+  # На современных iPhone (CoreDevice) xctrace часто помечает устройство как
+  # offline, хотя devicectl с ним прекрасно работает. Поэтому достижимость
+  # проверяем именно через devicectl — он принимает и аппаратный UDID.
+  local udid="$1"
+  [[ -n "$udid" ]] || return 1
+  xcrun devicectl device info details --device "$udid" >/dev/null 2>&1
+}
+
 resolve_device_udid() {
   # Жёсткая фиксация устройства имеет наивысший приоритет.
   if [[ -n "${IOS_DEVICE_ID:-}" ]]; then
@@ -54,26 +75,34 @@ resolve_device_udid() {
   local connected
   connected="$(list_connected_udids)"
 
-  # Предпочитаем основной телефон (iPhone (3)), если он реально подключён.
-  if [[ -n "$connected" ]] && grep -qx "$PREFERRED_DEVICE_ID" <<<"$connected"; then
+  # По умолчанию — СТРОГО основной телефон (iPhone (3)).
+  # Считаем его доступным, если он онлайн в xctrace ИЛИ достижим через devicectl.
+  # Это защищает от тихой установки на чужой подключённый телефон.
+  if grep -qx "$PREFERRED_DEVICE_ID" <<<"$connected" \
+    || device_reachable_via_devicectl "$PREFERRED_DEVICE_ID"; then
     echo "$PREFERRED_DEVICE_ID"
     return
   fi
 
-  # Иначе — первое реально подключённое устройство.
-  head -1 <<<"$connected"
+  # iPhone (3) не доступен. Падаем (пустой вывод), если явно не разрешили
+  # ставить на любое устройство через ALLOW_ANY_DEVICE=1.
+  if [[ "${ALLOW_ANY_DEVICE:-0}" == "1" ]]; then
+    head -1 <<<"$connected"
+  fi
 }
 
 build_with_provisioning_updates() {
   local udid="$1"
+  local destination="$2"
   echo "→ Сборка (${CONFIGURATION}) с обновлением provisioning profiles…"
+  echo "  destination: $destination"
   echo "  (App Groups + Share Extension — нужен вход в Xcode / Apple ID)"
 
   local -a xcode_args=(
     -workspace "$ROOT/ios/koshel.xcworkspace"
     -scheme koshel
     -configuration "$CONFIGURATION"
-    -destination "id=$udid"
+    -destination "$destination"
     -allowProvisioningUpdates
     -allowProvisioningDeviceRegistration
     "DEVELOPMENT_TEAM=$TEAM_ID"
@@ -149,23 +178,53 @@ EOF
 
 DEVICE_UDID="$(resolve_device_udid || true)"
 if [[ -z "${DEVICE_UDID:-}" ]]; then
-  echo "→ Подключённый iPhone не найден (devicectl/xctrace пусты)."
-  echo "  Подключите iPhone (3) по USB, разблокируйте экран и нажмите «Доверять»."
-  echo "  Передаём выбор устройства expo…"
-  expo_args=(expo run:ios --device)
-  # Важно: без этого фолбэк собирает Debug (нужен Metro), а мы хотим Release.
-  if [[ "$CONFIGURATION" == "Release" ]]; then
-    expo_args+=(--configuration Release)
+  echo "✗ iPhone (3) не подключён (UDID $PREFERRED_DEVICE_ID)."
+  echo "  Чтобы не поставить сборку по ошибке на ЧУЖОЙ телефон, установка остановлена."
+  echo ""
+  connected_named="$(list_connected_named || true)"
+  if [[ -n "$connected_named" ]]; then
+    echo "  Сейчас реально подключены другие устройства:"
+    echo "$connected_named" | sed 's/^/    • /'
+    echo ""
+  else
+    echo "  Реально подключённых устройств не найдено."
+    echo ""
   fi
-  npx "${expo_args[@]}"
-  exit $?
+  echo "  Что сделать:"
+  echo "    1. Подключите iPhone (3) кабелем (именно дата-кабелем, не «только зарядка»)."
+  echo "    2. Разблокируйте экран и нажмите «Доверять этому компьютеру»."
+  echo "    3. Проверьте, что он стал онлайн: xcrun devicectl list devices"
+  echo "       (нужно состояние connected, а не «available/offline» по сети)."
+  echo "    4. Запустите снова: npm run ios:release"
+  echo ""
+  echo "  Если действительно хотите поставить на другой подключённый телефон —"
+  echo "    ALLOW_ANY_DEVICE=1 npm run ios:release"
+  echo "  Либо зафиксируйте конкретный телефон: IOS_DEVICE_ID=<udid> npm run ios:release"
+  exit 1
 fi
-echo "→ Целевое устройство: $DEVICE_UDID"
+
+if [[ "$DEVICE_UDID" == "$PREFERRED_DEVICE_ID" ]]; then
+  echo "→ Целевое устройство: iPhone (3) ($DEVICE_UDID)"
+else
+  echo "→ Целевое устройство (НЕ iPhone (3)): $DEVICE_UDID"
+fi
 
 set +e
-build_with_provisioning_updates "$DEVICE_UDID"
+build_with_provisioning_updates "$DEVICE_UDID" "id=$DEVICE_UDID"
 BUILD_STATUS=$?
 set -e
+
+if [[ "$BUILD_STATUS" -ne 0 ]]; then
+  # На CoreDevice-устройствах xcodebuild иногда не находит destination по id
+  # (видит его «офлайн»), хотя devicectl ставит без проблем. Пробуем собрать
+  # под generic iOS — установку всё равно сделает devicectl на нужный телефон.
+  echo ""
+  echo "→ destination по id не сработал, пробуем generic/platform=iOS…"
+  set +e
+  build_with_provisioning_updates "$DEVICE_UDID" "generic/platform=iOS"
+  BUILD_STATUS=$?
+  set -e
+fi
 
   if [[ "$BUILD_STATUS" -ne 0 ]]; then
     echo ""

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   KeyboardAvoidingView,
@@ -9,13 +8,18 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { GestureHandlerRootView, PanGestureHandler } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomSheetBackdrop } from '../ui/BottomSheetBackdrop';
+import { Button } from '../ui/Button';
+import { Chip } from '../ui/Chip';
+import { Input } from '../ui/Input';
+import { NavyHeroBlock } from '../ui/NavyHeroBlock';
+import { SectionLabel } from '../ui/SectionLabel';
 import { MarketSearchPicker } from '../MarketSearchPicker';
 import { CAPITAL_ASSET_TYPES } from '../../constants/capitalTypes';
 import {
@@ -28,7 +32,8 @@ import {
 import { searchCoingeckoCoins, searchMoexStocks, type MarketSearchItem } from '../../lib/marketSearch';
 import type { CapitalAssetType } from '../../types';
 import { useSwipeDownToClose } from '../../lib/useSwipeDownToClose';
-import { useAppTheme } from '../../contexts/ThemeContext';
+import { heroOnDark } from '../../theme/premium';
+import { spacing, typography } from '../../theme/layout';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 const AnimatedKeyboardAvoidingView = Animated.createAnimatedComponent(KeyboardAvoidingView);
@@ -87,7 +92,6 @@ type Props = {
 
 export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
   const insets = useSafeAreaInsets();
-  const { colors } = useAppTheme();
   const { translateY, backdropOpacity, close, PanGestureHandler, panGestureProps, onScroll } =
     useSwipeDownToClose(visible, onClose, { mode: 'header' });
   const [name, setName] = useState('');
@@ -128,98 +132,86 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
-      overlay: {
-        flex: 1,
-        justifyContent: 'flex-end',
-      },
-      dim: {
-        ...StyleSheet.absoluteFill,
-        backgroundColor: c.overlay,
-      },
+      overlay: { flex: 1, justifyContent: 'flex-end' },
       sheet: {
         width: '100%',
-        maxHeight: '88%',
+        maxHeight: '90%',
         minHeight: 520,
-        backgroundColor: c.background,
-        borderTopLeftRadius: radii.xl,
-        borderTopRightRadius: radii.xl,
-        paddingBottom: Math.max(insets.bottom, 16),
-        ...shadows.soft,
+        backgroundColor: c.surface,
+        borderTopLeftRadius: radii.xl + 4,
+        borderTopRightRadius: radii.xl + 4,
+        paddingBottom: Math.max(insets.bottom, spacing.lg),
+        overflow: 'hidden',
+        ...shadows.card,
       },
-      dragArea: {
+      handleWrap: {
         alignItems: 'center',
-        paddingTop: 10,
-        paddingBottom: 2,
+        paddingTop: spacing.sm,
+        paddingBottom: spacing.xs,
       },
       handle: {
         width: 40,
         height: 4,
         borderRadius: 2,
-        backgroundColor: c.border,
+        backgroundColor: heroOnDark.handle,
       },
-      header: {
+      heroInner: {
+        paddingHorizontal: spacing.xl,
+        paddingBottom: spacing.xl,
+      },
+      heroTop: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 16,
-        paddingBottom: 8,
       },
-      title: { fontSize: 20, fontWeight: '800', color: c.text },
-      closeButton: {
+      heroTitle: {
+        ...typography.h1,
+        color: heroOnDark.title,
+        letterSpacing: -0.6,
+        flex: 1,
+        paddingRight: spacing.md,
+      },
+      closeBtn: {
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: c.surface,
-        borderWidth: 1,
-        borderColor: c.border,
+        backgroundColor: heroOnDark.closeBg,
         alignItems: 'center',
         justifyContent: 'center',
       },
-      closeText: { fontSize: 22, color: c.textMuted, lineHeight: 24 },
-      content: { paddingHorizontal: 20, paddingBottom: 24, flexGrow: 1 },
-      cardLabel: {
-        fontSize: 12,
-        fontWeight: '700',
+      heroSubtitle: {
+        ...typography.body,
+        color: heroOnDark.subtitle,
+        marginTop: 6,
+        lineHeight: 21,
+      },
+      content: {
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing.lg,
+        paddingBottom: spacing.xxl,
+        flexGrow: 1,
+      },
+      chipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+        marginBottom: spacing.md,
+      },
+      formHint: {
+        ...typography.meta,
         color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        marginBottom: 10,
-        marginTop: 8,
+        lineHeight: 19,
+        marginBottom: spacing.md,
       },
-      input: {
+      formCard: {
+        backgroundColor: c.surfaceMuted,
+        borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: c.border,
-        borderRadius: 12,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        fontSize: 16,
-        color: c.text,
-        marginBottom: 10,
-        backgroundColor: c.backgroundDeep,
+        borderColor: c.borderLight,
+        padding: spacing.lg,
+        marginBottom: spacing.lg,
+        gap: spacing.md,
       },
-      types: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-      chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: c.border,
-        backgroundColor: c.backgroundDeep,
-      },
-      chipActive: { backgroundColor: c.accentSoft, borderColor: c.accent },
-      chipText: { fontSize: 13, fontWeight: '600', color: c.textMuted },
-      chipTextActive: { color: c.accentDark },
-      formHint: { fontSize: 13, color: c.textMuted, lineHeight: 18, marginBottom: 10 },
-      saveButton: {
-        backgroundColor: c.accent,
-        borderRadius: radii.md,
-        paddingVertical: 14,
-        alignItems: 'center',
-        marginTop: 8,
-      },
-      saveButtonText: { color: c.textOnAccent, fontWeight: '700', fontSize: 16 },
-      buttonDisabled: { opacity: 0.6 },
     })
   );
 
@@ -307,151 +299,148 @@ export function AddCapitalAssetSheet({ visible, onClose, onSubmit }: Props) {
       onRequestClose={close}
     >
       <GestureHandlerRootView style={{ flex: 1 }} pointerEvents="box-none">
-      <View style={styles.overlay} pointerEvents="box-none">
-        <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
-        <AnimatedKeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={[styles.sheet, { transform: [{ translateY }] }]}
-        >
-          <PanGestureHandler {...panGestureProps}>
-            <View>
-              <View style={styles.dragArea}>
-                <View style={styles.handle} />
-              </View>
-              <View style={styles.header}>
-                <Text style={styles.title}>Добавить актив</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={close} accessibilityLabel="Закрыть">
-                  <Text style={styles.closeText}>×</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </PanGestureHandler>
-
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            showsVerticalScrollIndicator={false}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
+        <View style={styles.overlay} pointerEvents="box-none">
+          <BottomSheetBackdrop onPress={close} opacity={backdropOpacity} />
+          <AnimatedKeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={[styles.sheet, { transform: [{ translateY }] }]}
           >
-            <Text style={styles.cardLabel}>Тип актива</Text>
-            <View style={styles.types}>
-              {CAPITAL_ASSET_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  style={[styles.chip, assetType === type.value && styles.chipActive]}
-                  onPress={() => handleTypeChange(type.value)}
-                >
-                  <Text style={[styles.chipText, assetType === type.value && styles.chipTextActive]}>
-                    {type.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {showNameField ? (
-              <>
-                <Text style={styles.cardLabel}>Название</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Например: Вклад в Сбере"
-                  placeholderTextColor={colors.textMuted}
-                  value={name}
-                  onChangeText={setName}
-                />
-              </>
-            ) : null}
-
-            {isMarketForm ? (
-              <>
-                <Text style={styles.formHint}>
-                  {assetType === 'crypto'
-                    ? 'Популярные монеты — кнопками ниже. Остальные — через поиск.'
-                    : assetType === 'cash'
-                      ? 'Курс валюты — с сайта ЦБ РФ.'
-                      : 'Акции — котировки MOEX. Начните вводить тикер (ВК → VKCO).'}
-                </Text>
-                <View style={styles.types}>
-                  {quickPickOptions.map((unit) => {
-                    const isActive =
-                      marketUnit === unit.value &&
-                      (assetType === 'cash' || !marketSearchSelection);
-                    return (
-                      <TouchableOpacity
-                        key={unit.value}
-                        style={[styles.chip, isActive && styles.chipActive]}
-                        onPress={() => {
-                          setMarketUnit(unit.value);
-                          setMarketSearchSelection(null);
-                        }}
-                      >
-                        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-                          {unit.symbol}
+            <PanGestureHandler {...panGestureProps}>
+              <View>
+                <NavyHeroBlock>
+                  <View style={styles.handleWrap}>
+                    <View style={styles.handle} />
+                  </View>
+                  <View style={styles.heroInner}>
+                    <View style={styles.heroTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.heroTitle}>Добавить актив</Text>
+                        <Text style={styles.heroSubtitle}>
+                          Акции, крипта, валюта или ручная оценка
                         </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.closeBtn}
+                        onPress={close}
+                        accessibilityLabel="Закрыть"
+                      >
+                        <Ionicons name="close" size={20} color={heroOnDark.title} />
                       </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                {assetType === 'crypto' ? (
-                  <MarketSearchPicker
-                    placeholder="Другая монета (PEPE, WLD, ATOM…)"
-                    selected={marketSearchSelection}
-                    onSelect={setMarketSearchSelection}
-                    onSearch={searchCoingeckoCoins}
-                    disabled={isSaving}
-                  />
-                ) : null}
-                {assetType === 'stocks' ? (
-                  <MarketSearchPicker
-                    placeholder="Поиск акции (ВК, Сбер, TATN…)"
-                    selected={marketSearchSelection}
-                    onSelect={setMarketSearchSelection}
-                    onSearch={searchMoexStocks}
-                    disabled={isSaving}
-                  />
-                ) : null}
-                <TextInput
-                  style={styles.input}
-                  placeholder={
-                    assetType === 'stocks' || assetType === 'crypto'
-                      ? `Сколько · ${getUnitSymbol(resolvedMarketUnit) || '…'}`
-                      : `Количество ${quickPickOptions.find((u) => u.value === marketUnit)?.symbol ?? ''}`
-                  }
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="decimal-pad"
-                  value={quantity}
-                  onChangeText={setQuantity}
-                />
-              </>
-            ) : (
-              <>
-                <Text style={styles.cardLabel}>Сумма в ₽</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Текущая стоимость"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numeric"
-                  value={amount}
-                  onChangeText={setAmount}
-                />
-              </>
-            )}
+                    </View>
+                  </View>
+                </NavyHeroBlock>
+              </View>
+            </PanGestureHandler>
 
-            <TouchableOpacity
-              style={[styles.saveButton, isSaving && styles.buttonDisabled]}
-              onPress={() => void handleSubmit()}
-              disabled={isSaving}
+            <ScrollView
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={false}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
             >
-              {isSaving ? (
-                <ActivityIndicator color={colors.textOnAccent} />
-              ) : (
-                <Text style={styles.saveButtonText}>Добавить</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </AnimatedKeyboardAvoidingView>
-      </View>
+              <SectionLabel>Тип актива</SectionLabel>
+              <View style={styles.chipRow}>
+                {CAPITAL_ASSET_TYPES.map((type) => (
+                  <Chip
+                    key={type.value}
+                    label={type.label}
+                    active={assetType === type.value}
+                    variant="default"
+                    onPress={() => handleTypeChange(type.value)}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.formCard}>
+                {showNameField ? (
+                  <Input
+                    label="Название"
+                    placeholder="Например: Вклад в Сбере"
+                    value={name}
+                    onChangeText={setName}
+                  />
+                ) : null}
+
+                {isMarketForm ? (
+                  <>
+                    <Text style={styles.formHint}>
+                      {assetType === 'crypto'
+                        ? 'Популярные монеты — кнопками ниже. Остальные — через поиск.'
+                        : assetType === 'cash'
+                          ? 'Курс валюты — с сайта ЦБ РФ.'
+                          : 'Акции — котировки MOEX. Начните вводить тикер (ВК → VKCO).'}
+                    </Text>
+                    <View style={styles.chipRow}>
+                      {quickPickOptions.map((unit) => {
+                        const isActive =
+                          marketUnit === unit.value &&
+                          (assetType === 'cash' || !marketSearchSelection);
+                        return (
+                          <Chip
+                            key={unit.value}
+                            label={unit.symbol}
+                            active={isActive}
+                            variant="accent"
+                            onPress={() => {
+                              setMarketUnit(unit.value);
+                              setMarketSearchSelection(null);
+                            }}
+                          />
+                        );
+                      })}
+                    </View>
+                    {assetType === 'crypto' ? (
+                      <MarketSearchPicker
+                        placeholder="Другая монета (PEPE, WLD, ATOM…)"
+                        selected={marketSearchSelection}
+                        onSelect={setMarketSearchSelection}
+                        onSearch={searchCoingeckoCoins}
+                        disabled={isSaving}
+                      />
+                    ) : null}
+                    {assetType === 'stocks' ? (
+                      <MarketSearchPicker
+                        placeholder="Поиск акции (ВК, Сбер, TATN…)"
+                        selected={marketSearchSelection}
+                        onSelect={setMarketSearchSelection}
+                        onSearch={searchMoexStocks}
+                        disabled={isSaving}
+                      />
+                    ) : null}
+                    <Input
+                      label="Количество"
+                      placeholder={
+                        assetType === 'stocks' || assetType === 'crypto'
+                          ? `Сколько · ${getUnitSymbol(resolvedMarketUnit) || '…'}`
+                          : `Количество ${quickPickOptions.find((u) => u.value === marketUnit)?.symbol ?? ''}`
+                      }
+                      keyboardType="decimal-pad"
+                      value={quantity}
+                      onChangeText={setQuantity}
+                    />
+                  </>
+                ) : (
+                  <Input
+                    label="Сумма в ₽"
+                    placeholder="Текущая стоимость"
+                    keyboardType="numeric"
+                    value={amount}
+                    onChangeText={setAmount}
+                  />
+                )}
+              </View>
+
+              <Button
+                label="Добавить в портфель"
+                onPress={() => void handleSubmit()}
+                loading={isSaving}
+                disabled={isSaving}
+              />
+            </ScrollView>
+          </AnimatedKeyboardAvoidingView>
+        </View>
       </GestureHandlerRootView>
     </Modal>
   );

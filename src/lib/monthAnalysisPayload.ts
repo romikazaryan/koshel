@@ -51,8 +51,6 @@ function normalizeMerchantTitle(title: string): string {
 
 function monthTotals(
   transactions: Transaction[],
-  subscriptions: Subscription[],
-  debts: Debt[],
   ref: MonthRef
 ): { income: number; expenses: number; balance: number } {
   const { start, end } = getMonthRange(ref);
@@ -62,16 +60,14 @@ function monthTotals(
     .filter((item) => item.kind === 'expense')
     .reduce((sum, item) => sum + item.amount, 0);
   const refunds = sumPurchaseRefunds(monthTx);
-  const subs = getSubscriptionsTotalForMonth(subscriptions, ref);
-  const debtPay = getDebtsTotalForMonth(debts, ref);
-  const expenses = expenseTx - refunds + subs + debtPay;
+  // Подписки и долги учитываются отдельно как обязательные платежи (fixedCosts),
+  // в фактические расходы не суммируются, чтобы не было двойного счёта с операциями.
+  const expenses = expenseTx - refunds;
   return { income, expenses, balance: income - expenses };
 }
 
 function buildCategorySummary(
   transactions: Transaction[],
-  subscriptions: Subscription[],
-  debts: Debt[],
   ref: MonthRef
 ): Array<{ category: string; amount: number }> {
   const { start, end } = getMonthRange(ref);
@@ -84,15 +80,6 @@ function buildCategorySummary(
       grouping.set(cat, (grouping.get(cat) ?? 0) + item.amount);
     });
 
-  getActiveSubscriptionsForMonth(subscriptions, ref).forEach((sub) => {
-    const cat = sub.category as Category;
-    grouping.set(cat, (grouping.get(cat) ?? 0) + sub.amount);
-  });
-
-  getActiveDebtsForMonth(debts, ref).forEach((debt) => {
-    grouping.set('Другое', (grouping.get('Другое') ?? 0) + debt.monthlyPayment);
-  });
-
   return Array.from(grouping.entries())
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
@@ -100,14 +87,12 @@ function buildCategorySummary(
 
 function buildPeriodCategorySummary(
   transactions: Transaction[],
-  subscriptions: Subscription[],
-  debts: Debt[],
   endRef: MonthRef,
   periodMonths: AnalysisPeriodMonths
 ) {
   const grouping = new Map<string, number>();
   for (const ref of monthRefsInPeriod(endRef, periodMonths)) {
-    buildCategorySummary(transactions, subscriptions, debts, ref).forEach((item) => {
+    buildCategorySummary(transactions, ref).forEach((item) => {
       grouping.set(item.category, (grouping.get(item.category) ?? 0) + item.amount);
     });
   }
@@ -143,19 +128,17 @@ function buildPeriodTopMerchants(
 
 function buildCategoryShifts(
   transactions: Transaction[],
-  subscriptions: Subscription[],
-  debts: Debt[],
   endRef: MonthRef,
   periodMonths: AnalysisPeriodMonths
 ) {
   if (periodMonths <= 1) return [];
 
-  const current = buildCategorySummary(transactions, subscriptions, debts, endRef);
+  const current = buildCategorySummary(transactions, endRef);
   const previous: Array<Map<string, number>> = [];
 
   for (let i = 1; i < periodMonths; i += 1) {
     const ref = shiftMonth(endRef, -i);
-    const summary = buildCategorySummary(transactions, subscriptions, debts, ref);
+    const summary = buildCategorySummary(transactions, ref);
     previous.push(new Map(summary.map((item) => [item.category, item.amount])));
   }
 
@@ -366,7 +349,7 @@ export function buildMonthAnalysisPayload(input: {
 
   const monthlyTrend: MonthAnalysisTrendPoint[] = monthRefsInPeriod(selectedMonth, periodMonths).map(
     (ref) => {
-      const totals = monthTotals(transactions, subscriptions, debts, ref);
+      const totals = monthTotals(transactions, ref);
       return {
         month: monthKey(ref),
         label: formatMonthLabel(ref),
@@ -381,8 +364,6 @@ export function buildMonthAnalysisPayload(input: {
 
   const categoryRows = buildPeriodCategorySummary(
     transactions,
-    subscriptions,
-    debts,
     selectedMonth,
     periodMonths
   );
@@ -419,15 +400,15 @@ export function buildMonthAnalysisPayload(input: {
     topMerchants: buildPeriodTopMerchants(transactions, selectedMonth, periodMonths),
     categoryShifts: buildCategoryShifts(
       transactions,
-      subscriptions,
-      debts,
       selectedMonth,
       periodMonths
     ),
     fixedCosts,
     fixedCostsTotal,
     fixedCostsShare:
-      periodExpenses > 0 ? Math.round((fixedCostsTotal / periodExpenses) * 100) : 0,
+      periodExpenses + fixedCostsTotal > 0
+        ? Math.round((fixedCostsTotal / (periodExpenses + fixedCostsTotal)) * 100)
+        : 0,
     optimizationHints: buildOptimizationHints({
       balance: periodBalance,
       income: periodIncome,

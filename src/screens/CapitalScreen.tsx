@@ -24,6 +24,8 @@ import { CapitalHistoryPeriodToggle } from '../components/capital/CapitalHistory
 import { CapitalMarketAssetRow } from '../components/capital/CapitalMarketAssetRow';
 import { CapitalSectionSummary } from '../components/capital/CapitalSectionSummary';
 import { CapitalHeroCard } from '../components/capital/CapitalHeroCard';
+import { CapitalScreenToolbar } from '../components/capital/CapitalScreenToolbar';
+import { NavyShimmerPressable } from '../components/ui/NavyShimmerBackground';
 import { CapitalManualAssetRow } from '../components/capital/CapitalManualAssetRow';
 import {
   AddCapitalAssetSheet,
@@ -90,6 +92,7 @@ import {
 import type { CapitalAsset } from '../types';
 import { useAppTheme } from '../contexts/ThemeContext';
 import { CapitalCurrencyProvider } from '../contexts/CapitalCurrencyContext';
+import { spacing } from '../theme/layout';
 import { useThemedStyles } from '../theme/useThemedStyles';
 
 function isCompactMarketAsset(item: CapitalAsset) {
@@ -173,49 +176,11 @@ export function CapitalScreen() {
       safeArea: { flex: 1, backgroundColor: 'transparent' },
       screenBody: {
         flex: 1,
-        paddingHorizontal: 16,
+        paddingHorizontal: spacing.xl,
       },
       headerBlock: {
         flexGrow: 0,
-        paddingTop: 8,
-        paddingBottom: 2,
-      },
-      headerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-      },
-      screenTitle: {
-        fontSize: 22,
-        fontWeight: '900',
-        color: c.text,
-        letterSpacing: -0.5,
-      },
-      headerActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-      },
-      iconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: c.surfaceMuted,
-        borderWidth: 1,
-        borderColor: c.borderLight,
-      },
-      iconButtonDisabled: { opacity: 0.5 },
-      addButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: c.accent,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...shadows.soft,
+        paddingBottom: spacing.xs,
       },
       empty: {
         paddingVertical: 28,
@@ -235,6 +200,13 @@ export function CapitalScreen() {
         textAlign: 'center',
       },
       emptyText: { color: c.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+      emptyAddButton: {
+        marginTop: 16,
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: radii.lg,
+        ...shadows.soft,
+      },
       marketSection: { marginBottom: 10 },
       marketSectionCard: {
         backgroundColor: c.surface,
@@ -1135,33 +1107,13 @@ export function CapitalScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.screenBody}>
         <View style={styles.headerBlock}>
-          <View style={styles.headerRow}>
-            <Text style={styles.screenTitle}>Капитал</Text>
-            <View style={styles.headerActions}>
-              {hasLiveAssets ? (
-                <TouchableOpacity
-                  style={[styles.iconButton, isRefreshingRates && styles.iconButtonDisabled]}
-                  onPress={() => void handleRefreshRates()}
-                  disabled={isRefreshingRates}
-                  accessibilityRole="button"
-                  accessibilityLabel={ratesUpdatedLabel || 'Обновить курсы'}
-                >
-                  {isRefreshingRates ? (
-                    <ActivityIndicator color={colors.accent} size="small" />
-                  ) : (
-                    <Ionicons name="refresh" size={18} color={colors.accentDark} />
-                  )}
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => setAddSheetVisible(true)}
-                accessibilityLabel="Добавить актив"
-              >
-                <Ionicons name="add" size={22} color={colors.textOnAccent} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <CapitalScreenToolbar
+            ratesHint={activeTotal > 0 ? heroRatesHint : null}
+            isRefreshingRates={isRefreshingRates}
+            onRefreshRates={() => void handleRefreshRates()}
+            onAddAsset={() => setAddSheetVisible(true)}
+            showRefresh={hasLiveAssets}
+          />
 
           {activeTotal > 0 ? (
             <CapitalHeroCard
@@ -1183,10 +1135,22 @@ export function CapitalScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.empty}>
+              <Ionicons name="pie-chart-outline" size={36} color={colors.accentDark} style={{ marginBottom: 12, opacity: 0.85 }} />
               <Text style={styles.emptyTitle}>Портфель пуст</Text>
               <Text style={styles.emptyText}>
-                Добавьте первый актив — акции, вклад, крипту или недвижимость.
+                Добавьте первый актив — акции, вклад, крипту или недвижимость. T-Invest подключается
+                в профиле.
               </Text>
+              <NavyShimmerPressable
+                style={styles.emptyAddButton}
+                contentStyle={{ alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setAddSheetVisible(true)}
+                glow="compact"
+              >
+                <Text style={{ color: colors.textOnAccent, fontWeight: '700', fontSize: 16 }}>
+                  Добавить актив
+                </Text>
+              </NavyShimmerPressable>
             </View>
           </ScrollView>
         ) : (

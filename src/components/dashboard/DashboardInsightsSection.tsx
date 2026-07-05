@@ -2,10 +2,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { CategoryChart } from '../CategoryChart';
 import { HealthScoreCard } from '../HealthScoreCard';
 import { MonthlyBudgetCard } from '../MonthlyBudgetCard';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { AnalyzeMonthInvite } from './AnalyzeMonthInvite';
 import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
+import { SectionLabel } from '../ui/SectionLabel';
 import { useThemedStyles } from '../../theme/useThemedStyles';
+import { spacing } from '../../theme/layout';
 import type { AnalysisPeriodMonths } from '../../types/monthAnalysis';
 import type { Category } from '../../types';
 
@@ -23,12 +24,6 @@ type Props = {
   analyzing: boolean;
 };
 
-const PERIOD_OPTIONS: { value: string; label: string }[] = [
-  { value: '1', label: 'Мес' },
-  { value: '6', label: '6 мес' },
-  { value: '12', label: 'Год' },
-];
-
 export function DashboardInsightsSection({
   monthlyBudget,
   totalExpenses,
@@ -44,26 +39,19 @@ export function DashboardInsightsSection({
 }: Props) {
   const styles = useThemedStyles(({ colors: c, radii }) =>
     StyleSheet.create({
-      sectionLabel: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: c.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 0.8,
-        marginBottom: 8,
-      },
       block: {
-        marginBottom: 12,
+        marginBottom: spacing.sm,
         padding: 0,
         overflow: 'hidden',
+        borderRadius: radii.xl,
       },
       sectionHeader: {
-        paddingHorizontal: 14,
-        paddingTop: 12,
-        paddingBottom: 8,
-        backgroundColor: c.surfaceMuted,
-        borderBottomWidth: 1,
+        paddingHorizontal: spacing.md,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.sm,
+        borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: c.borderLight,
+        backgroundColor: c.surfaceMuted,
       },
       sectionHeaderText: {
         fontSize: 12,
@@ -73,56 +61,20 @@ export function DashboardInsightsSection({
         letterSpacing: 0.6,
       },
       sectionBody: {
-        paddingHorizontal: 14,
-        paddingVertical: 12,
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
       },
       divider: {
-        height: 1,
+        height: StyleSheet.hairlineWidth,
         backgroundColor: c.borderLight,
-        marginHorizontal: 14,
-      },
-      analyzeWrap: {
-        backgroundColor: c.primarySoft,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: c.borderLight,
-      },
-      analyzeTitle: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: c.text,
-        marginBottom: 2,
-      },
-      analyzeHint: {
-        fontSize: 12,
-        color: c.textMuted,
-        marginBottom: 10,
-        lineHeight: 16,
-      },
-      periodControl: {
-        marginBottom: 10,
-      },
-      button: {
-        backgroundColor: c.navy,
-        borderRadius: radii.md,
-        paddingVertical: 12,
-        alignItems: 'center',
-      },
-      buttonDisabled: {
-        opacity: 0.6,
-      },
-      buttonText: {
-        fontSize: 14,
-        fontWeight: '800',
-        color: c.textOnDark,
+        marginVertical: spacing.sm,
       },
     })
   );
 
   return (
     <>
-      <Text style={styles.sectionLabel}>Аналитика</Text>
+      <SectionLabel>Аналитика</SectionLabel>
       <Card style={styles.block} variant="flat">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderText}>Обзор месяца</Text>
@@ -137,7 +89,7 @@ export function DashboardInsightsSection({
                 monthlyBudget={monthlyBudget}
                 totalExpenses={totalExpenses}
               />
-              <View style={[styles.divider, { marginTop: 12, marginBottom: 12 }]} />
+              <View style={styles.divider} />
             </>
           ) : null}
 
@@ -145,7 +97,7 @@ export function DashboardInsightsSection({
 
           {showChart ? (
             <>
-              <View style={[styles.divider, { marginTop: 12, marginBottom: 12 }]} />
+              <View style={styles.divider} />
               <CategoryChart
                 embedded
                 compact
@@ -156,23 +108,14 @@ export function DashboardInsightsSection({
             </>
           ) : null}
         </View>
-
-        <View style={styles.analyzeWrap}>
-          <Text style={styles.analyzeTitle}>Финансовый разбор</Text>
-          <Text style={styles.analyzeHint}>AI подскажет, на что обратить внимание</Text>
-          <SegmentedControl
-            style={styles.periodControl}
-            options={PERIOD_OPTIONS}
-            value={String(analysisPeriod)}
-            onChange={(value) => onPeriodChange(Number(value) as AnalysisPeriodMonths)}
-          />
-          <Button
-            label={analyzing ? 'Анализируем…' : 'Анализировать'}
-            onPress={onAnalyze}
-            loading={analyzing}
-          />
-        </View>
       </Card>
+
+      <AnalyzeMonthInvite
+        analysisPeriod={analysisPeriod}
+        onPeriodChange={onPeriodChange}
+        onAnalyze={onAnalyze}
+        analyzing={analyzing}
+      />
     </>
   );
 }

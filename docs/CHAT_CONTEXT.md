@@ -3,7 +3,7 @@
 > **Этот файл — главный источник правды по проекту.**  
 > Отправляйте его в начале нового чата + напишите, что делать сейчас.
 
-**Последнее обновление:** 2026-06-07 (Open Finance — фундамент банков)
+**Последнее обновление:** 2026-07-05 (стабилизация + premium UI + Open Finance deploy)
 
 ---
 
@@ -71,8 +71,8 @@
 
 ## Текущий фокус
 
-**Статус:** MVP++ на iPhone **работает**. Начата **Фаза 6 — Open Finance** (схема БД, экран подключений, демо-синк).  
-**Следующий шаг:** применить миграцию + deploy `bank-sync` → партнёрство с T‑Банк / Open Finance API.
+**Статус:** MVP++ на iPhone **работает**. Open Finance функции **задеплоены** (`bank-sync`, `tinvest-connect`, `tinvest-sync`).  
+**Следующий шаг:** пересборка на iPhone (`npm run ios:release`) → подключить T-Invest → письмо T‑Банку (Open Finance).
 
 ---
 
@@ -167,7 +167,7 @@
 | [x] | Edge Function `bank-sync` (демо-синк), защита `source=bank` только с сервера |
 | [x] | Экран «Банки и подключения» в профиле |
 | [x] | T-Invest read-only: токен, синк портфеля → `capital_assets`, дивиденды/комиссии |
-| [ ] | Deploy миграций и `tinvest-connect` / `tinvest-sync` на Supabase |
+| [x] | Deploy `bank-sync`, `tinvest-connect`, `tinvest-sync`, `connection-revoke`, `capital-metrics-sync` |
 | [ ] | Партнёрство / OAuth первого банка (T‑Банк openapi@tbank.ru) |
 | [ ] | Авто-категоризация MCC, фоновый синк |
 | [ ] | Брокеры (T‑Invest, БКС) → связь с `capital_assets` |
@@ -354,6 +354,11 @@ iproxy 8081 8081
 | 2026-06-01 | Капитал: один prefetch chart 365д → переключение 7/30/90/365д мгновенно; крипта без цены монеты |
 | 2026-06-01 | Fix: динамика акций MOEX — свечи `/candles` с пагинацией вместо `/history` (разные цифры по периодам) |
 | 2026-06-07 | T-Invest: read-only токен, Edge tinvest-connect/sync, портфель в Капитал, docs/TINVEST_SETUP.md |
+| 2026-07-05 | Стабилизация: фикс кэша дашборда при сбое сети, понятные ошибки auth, пустое состояние на главной |
+| 2026-07-05 | Онбординг-опрос + тур по приложению (профиль → повтор) |
+| 2026-07-05 | Premium UI: Recommendations, BankConnections; Capital empty state |
+| 2026-07-05 | Deploy Open Finance edge functions на Supabase |
+| 2026-07-05 | Premium UI: Profile, DashboardInsights, StatementImports, EditTransaction, Capital header |
 
 ---
 

@@ -1,15 +1,8 @@
-import { useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, {
-  Defs,
-  LinearGradient as SvgLinearGradient,
-  RadialGradient,
-  Rect,
-  Stop,
-} from 'react-native-svg';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../contexts/ThemeContext';
 import { useCapitalCurrency } from '../../contexts/CapitalCurrencyContext';
+import { NavyShimmerShell } from '../ui/NavyShimmerBackground';
 import { moneyText } from '../../theme/layout';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 import type { CapitalAllocationSegment } from '../../lib/capitalAssetDisplay';
@@ -47,7 +40,6 @@ export function CapitalHeroCard({
 }: Props) {
   const { isDark, colors: c } = useAppTheme();
   const { format, formatSigned, symbol, cycle } = useCapitalCurrency();
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
   const styles = useThemedStyles(({ colors: c, radii, shadows }) =>
     StyleSheet.create({
@@ -57,20 +49,13 @@ export function CapitalHeroCard({
         paddingTop: 16,
         paddingBottom: 16,
         marginBottom: 10,
-        backgroundColor: c.navy,
         borderWidth: 1,
         borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
-        overflow: 'hidden',
         ...shadows.card,
       },
-      goldEdge: {
-        position: 'absolute',
-        top: 0,
-        left: 18,
-        right: 18,
-        height: 1.5,
-        backgroundColor: GOLD,
-        opacity: 0.5,
+      content: {
+        position: 'relative',
+        zIndex: 2,
       },
       topRow: {
         flexDirection: 'row',
@@ -193,39 +178,14 @@ export function CapitalHeroCard({
     })
   );
 
-  const onLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0 && (size?.w !== width || size?.h !== height)) {
-      setSize({ w: width, h: height });
-    }
-  };
-
   const changeUp = (dayChange?.changeRub ?? 0) > 0;
   const changeDown = (dayChange?.changeRub ?? 0) < 0;
   const changeColor = changeUp ? UP : changeDown ? DOWN : 'rgba(255,236,205,0.7)';
   const showAllocation = allocation.length >= 2;
 
   return (
-    <View style={styles.card} onLayout={onLayout}>
-      {size ? (
-        <Svg style={StyleSheet.absoluteFill} width={size.w} height={size.h}>
-          <Defs>
-            <SvgLinearGradient id="capHeroBg" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor={c.navyMid} />
-              <Stop offset="1" stopColor={c.navy} />
-            </SvgLinearGradient>
-            <RadialGradient id="capHeroGlow" cx="86%" cy="2%" r="62%">
-              <Stop offset="0" stopColor={GOLD} stopOpacity={isDark ? 0.34 : 0.3} />
-              <Stop offset="1" stopColor={GOLD} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Rect x={0} y={0} width={size.w} height={size.h} fill="url(#capHeroBg)" />
-          <Rect x={0} y={0} width={size.w} height={size.h} fill="url(#capHeroGlow)" />
-        </Svg>
-      ) : null}
-
-      <View style={styles.goldEdge} />
-
+    <NavyShimmerShell style={styles.card} idPrefix="capHero" showGoldEdge goldEdgeInset={18}>
+      <View style={styles.content}>
       <View style={styles.topRow}>
         <Text style={styles.label}>Всего капитала</Text>
         <Ionicons name="sparkles" size={14} color={GOLD} style={styles.sparkle} />
@@ -304,6 +264,7 @@ export function CapitalHeroCard({
           {ratesHint}
         </Text>
       ) : null}
-    </View>
+      </View>
+    </NavyShimmerShell>
   );
 }

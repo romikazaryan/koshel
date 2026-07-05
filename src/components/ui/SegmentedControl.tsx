@@ -1,4 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { typography } from '../../theme/layout';
 import { useThemedStyles } from '../../theme/useThemedStyles';
 
 type Option<T extends string> = { value: T; label: string };
@@ -11,37 +12,35 @@ type Props<T extends string> = {
 };
 
 export function SegmentedControl<T extends string>({ options, value, onChange, style }: Props<T>) {
-  const styles = useThemedStyles(({ colors, radii }) =>
+  const styles = useThemedStyles(({ colors, radii, shadows }) =>
     StyleSheet.create({
       track: {
         flexDirection: 'row',
         backgroundColor: colors.backgroundDeep,
-        borderRadius: radii.md,
+        borderRadius: radii.lg,
         padding: 4,
         marginBottom: 16,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
       },
       item: {
         flex: 1,
-        paddingVertical: 10,
+        paddingVertical: 11,
         alignItems: 'center',
-        borderRadius: radii.sm,
+        borderRadius: radii.md,
       },
       itemActive: {
         backgroundColor: colors.surface,
-        shadowColor: colors.shadow,
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
+        ...shadows.soft,
       },
       label: {
-        fontWeight: '600',
-        fontSize: 14,
+        ...typography.meta,
         color: colors.textMuted,
+        fontWeight: '600',
       },
       labelActive: {
         color: colors.text,
-        fontWeight: '700',
+        fontWeight: '800',
       },
     })
   );
@@ -55,6 +54,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, s
             key={opt.value}
             style={[styles.item, active && styles.itemActive]}
             onPress={() => onChange(opt.value)}
+            activeOpacity={0.8}
           >
             <Text style={[styles.label, active && styles.labelActive]}>{opt.label}</Text>
           </TouchableOpacity>
